@@ -2,6 +2,7 @@ import fastapi
 import pydantic
 import requests
 from docker.models.containers import Container
+from starknet_py.net.client_errors import ClientError
 
 from app import models
 
@@ -45,12 +46,13 @@ class ErrorNodeNotRunning(fastapi.HTTPException):
 
 
 class ErrorCodePlumbing(fastapi.HTTPException):
-    def __init__(self) -> None:
+    def __init__(self, err: ClientError) -> None:
         super().__init__(
             status_code=fastapi.status.HTTP_418_IM_A_TEAPOT,
             detail=(
                 "Sorry! This section of the code is under works, I'm aware of "
-                "it and working on a fix, please contact me."
+                "it and working on a fix, please contact me. "
+                f"{err}"
             ),
         )
 

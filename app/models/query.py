@@ -1,6 +1,7 @@
 from typing import Annotated
 
 import fastapi
+from starknet_py.net.client_models import Hash, Tag
 
 from .models import *
 
@@ -16,7 +17,7 @@ System = Annotated[
 ]
 
 BlockHash = Annotated[
-    str | None,
+    Hash | None,
     fastapi.Query(
         pattern=REGEX_HEX,
         description="A block hash, represented as a field element",
@@ -25,18 +26,19 @@ BlockHash = Annotated[
 
 
 BlockNumber = Annotated[
-    int | None, fastapi.Query(ge=0, description="A block number")
+    int | None,
+    fastapi.Query(ge=0, description="A block number or block tag"),
 ]
 
-QueryBlockTag = Annotated[
-    BlockTag | None,
+BlockTag = Annotated[
+    Tag | None,
     fastapi.Query(
         description="A block tag, ca be either 'latest' to reference the last synchronized block, or 'pending' to reference the last unverified block to yet be added to the chain",
     ),
 ]
 
 ContractAddress = Annotated[
-    str,
+    Hash,
     fastapi.Query(
         pattern=REGEX_HEX,
         description="Address of a contract on-chain",
@@ -44,14 +46,14 @@ ContractAddress = Annotated[
 ]
 
 ContractKey = Annotated[
-    str,
+    Hash,
     fastapi.Query(
         pattern=REGEX_HEX, description="Key to a storage element in a contract"
     ),
 ]
 
 TxHash = Annotated[
-    str,
+    Hash,
     fastapi.Query(
         pattern=REGEX_HEX, description="Address of a Transaction on-chain"
     ),
@@ -66,7 +68,7 @@ TxIndex = Annotated[
 ]
 
 ClassHash = Annotated[
-    str,
+    Hash,
     fastapi.Query(pattern=REGEX_HEX, description="Address of a class on-chain"),
 ]
 
@@ -90,6 +92,3 @@ TestInterval = Annotated[
         description=("Interval between subsequent tests, in milliseconds"),
     ),
 ]
-
-
-BlockId = BlockHash | BlockNumber | BlockTag

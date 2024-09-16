@@ -1,94 +1,29 @@
-from typing import Any
-
 import fastapi
+from starknet_py.net.client_models import Call, Hash
+from starknet_py.net.models.transaction import (
+    DeclareV1,
+    DeclareV2,
+    DeclareV3,
+    DeployAccountV1,
+    DeployAccountV3,
+    InvokeV1,
+    InvokeV3,
+)
 
-from app.models.query import BlockId
+from app.models.query import BlockHash, BlockNumber
 
 from .models import *
 
+TxInvoke = Annotated[InvokeV1 | InvokeV3, fastapi.Body()]
 
-def ex_tx_invoke() -> dict[str, Any]:
-    tx = TxInvokeV1(
-        sender_address="0x0",
-        calldata=["0x0"],
-        max_fee="0x0",
-        signature="0x0",
-        nonce="0x0",
-    )
+TxDeclare = Annotated[DeclareV1 | DeclareV2 | DeclareV3, fastapi.Body()]
 
-    return tx.model_dump()
+TxDeploy = Annotated[DeployAccountV1 | DeployAccountV3, fastapi.Body()]
+
+Tx = Annotated[TxInvoke | TxDeclare | TxDeploy, fastapi.Body()]
 
 
-def ex_tx_declare() -> dict[str, Any]:
-    tx = TxDeclareV2(
-        sender_address="0x0",
-        compiled_class_hash="0x0",
-        max_hash="0x0",
-        signature="0x0",
-        nonce="0x0",
-        contract_class=CairoV2ContractClass(
-            sierra_program=["0x0"],
-            contract_class_version="0.1.0",
-            entry_points_by_type=CairoV2EntryPointsByType(
-                CONTRUCTOR=[], EXTERNAL=[], L1_HANDLER=[]
-            ),
-            abi="",
-        ),
-    )
-
-    return tx.model_dump()
-
-
-TxInvoke = Annotated[
-    TxInvokeV0 | TxInvokeV1 | TxInvokeV3,
-    fastapi.Body(examples=[ex_tx_invoke()]),
-]
-
-
-TxDeclare = Annotated[
-    TxDeclareV1 | TxDeclareV2 | TxDeclareV3,
-    fastapi.Body(examples=[ex_tx_declare()]),
-]
-
-TxDeploy = TxDeployV1 | TxDeclareV3
-
-Tx = Annotated[
-    TxInvoke | TxDeclare | TxDeploy,
-    fastapi.Body(examples=[ex_tx_invoke()]),
-]
-
-
-class _BodyCall(pydantic.BaseModel):
-    contract_address: FieldHex
-    entry_point_selector: FieldHex
-    calldata: list[FieldHex] = []
-
-
-Call = Annotated[_BodyCall, fastapi.Body(include_in_schema=False)]
-
-
-class _BodyEstimateFee(pydantic.BaseModel):
-    request: Annotated[
-        Tx,
-        fastapi.Body(
-            description=(
-                "a sequence of transactions to estimate, running each "
-                "transaction on the state resulting from applying all the "
-                "previous ones"
-            ),
-        ),
-    ]
-    simulation_flags: Annotated[
-        list[SimulationFlags],
-        fastapi.Body(
-            description=(
-                "describes what parts of the transaction should be executed"
-            )
-        ),
-    ]
-
-
-EstimateFee = Annotated[_BodyEstimateFee, fastapi.Body(include_in_schema=False)]
+Call = Annotated[Call, fastapi.Body(include_in_schema=False)]
 
 
 class _BodyEstimateMessageFee(pydantic.BaseModel):
@@ -100,14 +35,14 @@ class _BodyEstimateMessageFee(pydantic.BaseModel):
         ),
     ]
     to_address: Annotated[
-        FieldHex,
+        Hash,
         pydantic.Field(
             title="Starknet address",
             description="The target L2 address the message is sent to",
         ),
     ]
     entry_point_selector: Annotated[
-        FieldHex,
+        Hash,
         pydantic.Field(
             description=(
                 "Entry point in the L1 contract used to send the message"
@@ -115,7 +50,7 @@ class _BodyEstimateMessageFee(pydantic.BaseModel):
         ),
     ]
     payload: Annotated[
-        list[FieldHex],
+        list[Hash],
         pydantic.Field(
             description=(
                 "The message payload being sent to an address on Starknet"
@@ -130,24 +65,14 @@ EstimateMessageFee = Annotated[
 
 
 class _BodyGetEvents(pydantic.BaseModel):
-    from_block: Annotated[
-        BlockId,
-        pydantic.Field(description="Filter events from this block (inclusive)"),
-    ]
-    to_block: Annotated[
-        BlockId,
-        pydantic.Field(
-            description="Filter events up to this block (exclusive)"
-        ),
-    ]
     address: Annotated[
-        FieldHex,
+        Hash,
         pydantic.Field(
             description="On-chain address of the contract emitting the events"
         ),
     ]
     keys: Annotated[
-        list[FieldHex],
+        list[list[Hash]],
         pydantic.Field(
             description=(
                 "Value used to filter events. Each key designate the possible "
@@ -156,8 +81,28 @@ class _BodyGetEvents(pydantic.BaseModel):
             )
         ),
     ]
+    from_block_number: Annotated[
+        BlockNumber | None,
+        pydantic.Field(description="Filter events from this block (inclusive)"),
+    ] = None
+    from_block_hash: Annotated[
+        BlockHash | None,
+        pydantic.Field(description="Filter events from this block (inclusive)"),
+    ] = None
+    to_block_number: Annotated[
+        BlockNumber | None,
+        pydantic.Field(
+            description="Filter events up to this block (exclusive)"
+        ),
+    ] = None
+    to_block_hash: Annotated[
+        BlockHash | None,
+        pydantic.Field(
+            description="Filter events up to this block (exclusive)"
+        ),
+    ] = None
     continuation_token: Annotated[
-        str,
+        str | None,
         pydantic.Field(
             description=(
                 "The token returned from the previous query. If no token is "
@@ -166,11 +111,11 @@ class _BodyGetEvents(pydantic.BaseModel):
                 "events at the end of that chunk in the next query"
             )
         ),
-    ]
+    ] = None
     chunk_size: Annotated[
         int,
         pydantic.Field(ge=0, description="Maximum number of events to return"),
-    ]
+    ] = 1
 
 
 GetEvents = Annotated[_BodyGetEvents, fastapi.Body(include_in_schema=False)]
@@ -181,15 +126,10 @@ class _BodySimulateTransactions(pydantic.BaseModel):
         list[Tx],
         pydantic.Field(
             description="The transactions to simulate",
-            examples=[[ex_tx_invoke(), ex_tx_invoke()]],
         ),
     ]
-    simulation_flags: Annotated[
-        SimulationFlags,
-        pydantic.Field(
-            description="Describes what parts of the transaction should be executed"
-        ),
-    ]
+    skip_validate: Annotated[bool, pydantic.Field()] = False
+    skip_fee_charge: Annotated[bool, pydantic.Field()] = False
 
 
 SimulateTransactions = Annotated[

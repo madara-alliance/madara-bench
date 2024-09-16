@@ -29,9 +29,9 @@ from app import rpc
 InputGenerator = AsyncGenerator[dict[str, Any], Any]
 
 
-def latest_common_block_number(urls: list[str]) -> int:
+async def latest_common_block_number(urls: list[str]) -> int:
     block_numbers: list[int] = [
-        rpc.rpc_starknet_blockNumber(url).output["result"] for url in urls
+        (await rpc.rpc_starknet_blockNumber(url)).output for url in urls
     ]
 
     return min(block_numbers)
@@ -42,11 +42,7 @@ async def gen_starknet_getBlockWithTxs(
     interval: float,
 ) -> InputGenerator:
     while True:
-        yield {
-            "block_id": rpc.to_block_id(
-                block_number=latest_common_block_number(urls)
-            )
-        }
+        yield {"block_number": await latest_common_block_number(urls)}
         await asyncio.sleep(interval)
 
 
@@ -62,21 +58,25 @@ async def gen_starknet_getStorageAt(
     client = FullNodeClient(node_url=urls[0])
 
     while True:
-        block_number = latest_common_block_number(urls)
-        block_number = random.randrange(block_number - 100, block_number)
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - 100, 0), block_number
+        )
         state_update = await client.get_state_update(block_number=block_number)
 
-        while len(state_update.state_diff.storage_diffs) == 0:
+        while len(state_update.state_diff.storage_diffs) < 2:
             # This is safe since block 0 has storage diffs
             block_number -= 1
-            state_update = await client.get_state_update(block_number)
+            state_update = await client.get_state_update(
+                block_number=block_number
+            )
 
-        storage_diff = state_update.state_diff.storage_diffs[0]
+        storage_diff = state_update.state_diff.storage_diffs[1]
         storage_entry = storage_diff.storage_entries[0]
         yield {
             "contract_address": storage_diff.address,
-            "contract_key": storage_entry.key,
-            "block_id": rpc.to_block_id(block_number=block_number),
+            "key": storage_entry.key,
+            "block_number": block_number,
         }
         await asyncio.sleep(interval)
 
@@ -87,15 +87,17 @@ async def gen_starknet_estimateFee(
     client = FullNodeClient(node_url=urls[0])
 
     while True:
-        block_number = latest_common_block_number(urls)
-        block_number = random.randrange(block_number - 100, block_number)
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - 100, 0), block_number
+        )
         block = await client.get_block(block_number=block_number)
         transactions = block.transactions
 
         while len(transactions) == 0 or transactions[0].version == 0:
             # FIX: this could failed if called too early in the sync
             block_number -= 1
-            block = await client.get_block(block_number)
+            block = await client.get_block(block_number=block_number)
             transactions = block.transactions
 
         tx = transactions[0]
@@ -179,9 +181,11 @@ async def gen_starknet_traceBlockTransactions(
     urls: list[str], interval: float
 ) -> InputGenerator:
     while True:
-        block_number = latest_common_block_number(urls)
-        block_number = random.randrange(block_number - 100, block_number)
-        yield {"block_id": {"block_number": block_number}}
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - 100, 0), block_number
+        )
+        yield {"block_number": block_number}
         await asyncio.sleep(interval)
 
 
@@ -189,7 +193,9 @@ async def gen_starknet_getBlockWithReceipts(
     urls: list[str], interval: float
 ) -> InputGenerator:
     while True:
-        block_number = latest_common_block_number(urls)
-        block_number = random.randrange(block_number - 100, block_number)
-        yield {"block_id": {"block_number": block_number}}
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - 100, 0), block_number
+        )
+        yield {"block_number": block_number}
         await asyncio.sleep(interval)

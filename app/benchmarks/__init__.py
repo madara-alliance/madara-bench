@@ -76,7 +76,7 @@ async def benchmark(
     rpc_call: rpc.RpcCall,
     samples: int,
     interval: int,
-) -> list[models.ResponseModelBench]:
+) -> models.ResponseModelBench:
     """Runs the actual rpc benchmark
 
     Args:
@@ -106,9 +106,14 @@ async def benchmark(
     elapsed = [[resp.elapsed for resp in resps] for resps in results]
     elapsed_avg = [sum(all) // len(all) for all in elapsed]
 
-    return [
-        models.ResponseModelBench(
-            node=node, method=rpc_call, when=when, elapsed_avg=elapsed_avg
+    nodes = [
+        models.NodeResponseBench(
+            node=node,
+            method=rpc_call,
+            when=when,
+            elapsed_avg=elapsed_avg,
         )
         for (node, when, elapsed_avg) in zip(node, when, elapsed_avg)
     ]
+
+    return models.ResponseModelBench(nodes=nodes, inputs=inputs)
