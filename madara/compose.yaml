@@ -1,0 +1,31 @@
+name: madara_runner
+
+services:
+  madara:
+    image: madara:latest
+    container_name: "madara_runner"
+    cpu_count: 4
+    mem_limit: "16gb"
+    ports:
+      - "9944"
+    environment:
+      RPC_API_KEY_FILE: /run/secrets/rpc_api_key
+      GATEWAY_KEY_FILE: /run/secrets/gateway_key
+    secrets:
+      - rpc_api_key
+      - gateway_key
+    volumes:
+      - type: volume
+        source: db
+        target: /data
+        volume:
+          nocopy: true
+
+secrets:
+  rpc_api_key:
+    file: ../secrets/rpc_api.secret
+  gateway_key:
+    file: ../secrets/gateway_key.secret
+
+volumes:
+  db:
