@@ -25,6 +25,7 @@ class NodeName(str, Enum):
     """The node used to run benchmarks."""
 
     MADARA = "madara"
+    JUNO = "juno"
 
 
 class ResponseModelStats(pydantic.BaseModel, Generic[T]):

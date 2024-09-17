@@ -7,7 +7,7 @@ services:
     cpu_count: 4
     mem_limit: "16gb"
     ports:
-      - "9944"
+      - "6060"
     environment:
       RPC_API_KEY_FILE: /run/secrets/rpc_api_key
       GATEWAY_KEY_FILE: /run/secrets/gateway_key

@@ -32,9 +32,12 @@ from starknet_py.net.full_node_client import FullNodeClient
 from starknet_py.net.models.transaction import AccountTransaction
 
 from app import error, models
+from app.models.models import NodeName
 
-MADARA_RPC_PORT: str = "9944/tcp"
+RPC_PORT_MADARA: str = "9944/tcp"
+RPC_PORT_JUNO: str = "6060/tcp"
 DOCKER_HOST_PORT: str = "HostPort"
+DOCKER_HOST_IP: str = "HostIp"
 
 T = TypeVar("T")
 
@@ -74,7 +77,10 @@ class RpcCall(str, Enum):
 
 
 def json_rpc(
-    url: str, method: str, params: dict[str, Any] | list[Any] = {}
+    node: NodeName,
+    url: str,
+    method: str,
+    params: dict[str, Any] | list[Any] = {},
 ) -> models.ResponseModelJSON[Any]:
     headers = {"content-type": "application/json"}
     data = {"id": 1, "jsonrpc": "2.0", "method": method, "params": params}
@@ -88,7 +94,7 @@ def json_rpc(
     output = response.json()
 
     return models.ResponseModelJSON(
-        node=models.NodeName.MADARA,
+        node=node,
         method=method,
         when=time_start,
         elapsed=perf_delta,
@@ -97,6 +103,7 @@ def json_rpc(
 
 
 async def json_rpc_starknet_py(
+    node: NodeName,
     method: str,
     caller: Coroutine[Any, Any, T],
 ) -> models.ResponseModelJSON:
@@ -107,7 +114,7 @@ async def json_rpc_starknet_py(
     perf_delta = perf_stop - perf_start
 
     return models.ResponseModelJSON(
-        node=models.NodeName.MADARA,
+        node=node,
         method=method,
         when=time_start,
         elapsed=perf_delta,
@@ -125,15 +132,22 @@ def to_block_number_or_tag(
         return block_number
 
 
-def rpc_url(node: models.NodeName, container: Container):
+def rpc_url(node: models.NodeName, container: Container) -> str:
     error.container_check_running(node, container)
 
     ports = container.ports
 
     match node:
         case models.NodeName.MADARA:
-            port = ports[MADARA_RPC_PORT][0][DOCKER_HOST_PORT]
-            return f"http://0.0.0.0:{port}"
+            port_info = ports[RPC_PORT_MADARA][0]
+            ip = port_info[DOCKER_HOST_IP]
+            port = port_info[DOCKER_HOST_PORT]
+            return f"http://{ip}:{port}"
+        case models.NodeName.JUNO:
+            port_info = ports[RPC_PORT_JUNO][0]
+            ip = port_info[DOCKER_HOST_IP]
+            port = port_info[DOCKER_HOST_PORT]
+            return f"http://{ip}:{port}"
 
 
 # =========================================================================== #
@@ -142,24 +156,28 @@ def rpc_url(node: models.NodeName, container: Container):
 
 
 async def rpc_starknet_blockHashAndNumber(
+    node: NodeName,
     url: str,
 ) -> models.ResponseModelJSON[BlockHashAndNumber]:
     client = FullNodeClient(node_url=url)
     block_hash_and_number = client.get_block_hash_and_number()
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_BLOCK_HASH_AND_NUMBER, block_hash_and_number
+        node, RpcCall.STARKNET_BLOCK_HASH_AND_NUMBER, block_hash_and_number
     )
 
 
-async def rpc_starknet_blockNumber(url: str) -> models.ResponseModelJSON[int]:
+async def rpc_starknet_blockNumber(
+    node: NodeName, url: str
+) -> models.ResponseModelJSON[int]:
     client = FullNodeClient(node_url=url)
     block_number = client.get_block_number()
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_BLOCK_NUMBER, block_number
+        node, RpcCall.STARKNET_BLOCK_NUMBER, block_number
     )
 
 
 async def rpc_starknet_call(
+    node: NodeName,
     url: str,
     call: models.body.Call,
     block_hash: models.query.BlockHash = None,
@@ -170,16 +188,19 @@ async def rpc_starknet_call(
     call = client.call_contract(
         call, block_hash, to_block_number_or_tag(block_number, block_tag)
     )
-    return await json_rpc_starknet_py(RpcCall.STARKNET_CALL, call)
+    return await json_rpc_starknet_py(node, RpcCall.STARKNET_CALL, call)
 
 
-async def rpc_starknet_chainId(url: str) -> models.ResponseModelJSON[str]:
+async def rpc_starknet_chainId(
+    node: NodeName, url: str
+) -> models.ResponseModelJSON[str]:
     client = FullNodeClient(node_url=url)
     chain_id = client.get_chain_id()
-    return await json_rpc_starknet_py(RpcCall.STARKNET_CHAIN_ID, chain_id)
+    return await json_rpc_starknet_py(node, RpcCall.STARKNET_CHAIN_ID, chain_id)
 
 
 async def rpc_starknet_estimateFee(
+    node: NodeName,
     url: str,
     tx: models.body.Tx | list[models.body.Tx],
     block_hash: models.query.BlockHash = None,
@@ -196,11 +217,12 @@ async def rpc_starknet_estimateFee(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_ESTIMATE_FEE, estimate_fee
+        node, RpcCall.STARKNET_ESTIMATE_FEE, estimate_fee
     )
 
 
 async def rpc_starknet_estimateMessageFee(
+    node: NodeName,
     url: str,
     body: models.body.EstimateMessageFee,
     block_hash: models.query.BlockHash = None,
@@ -218,11 +240,12 @@ async def rpc_starknet_estimateMessageFee(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_ESTIMATE_MESSAGE_FEE, estimage_message_fee
+        node, RpcCall.STARKNET_ESTIMATE_MESSAGE_FEE, estimage_message_fee
     )
 
 
 async def rpc_starknet_getBlockTransactionCount(
+    node: NodeName,
     url: str,
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
@@ -234,11 +257,12 @@ async def rpc_starknet_getBlockTransactionCount(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_BLOCK_TRANSACTION_COUNT, get_block_tx_count
+        node, RpcCall.STARKNET_GET_BLOCK_TRANSACTION_COUNT, get_block_tx_count
     )
 
 
 async def rpc_starknet_getBlockWithReceipts(
+    node: NodeName,
     url: str,
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
@@ -252,11 +276,12 @@ async def rpc_starknet_getBlockWithReceipts(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_BLOCK_WITH_RECEIPTS, block_with_receipts
+        node, RpcCall.STARKNET_GET_BLOCK_WITH_RECEIPTS, block_with_receipts
     )
 
 
 async def rpc_starknet_getBlockWithTxHashes(
+    node: NodeName,
     url: str,
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
@@ -270,11 +295,12 @@ async def rpc_starknet_getBlockWithTxHashes(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_BLOCK_WITH_TX_HASHES, block_with_tx_hashes
+        node, RpcCall.STARKNET_GET_BLOCK_WITH_TX_HASHES, block_with_tx_hashes
     )
 
 
 async def rpc_starknet_getBlockWithTxs(
+    node: NodeName,
     url: str,
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
@@ -286,11 +312,12 @@ async def rpc_starknet_getBlockWithTxs(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_BLOCK_WITH_TXS, block_with_txs
+        node, RpcCall.STARKNET_GET_BLOCK_WITH_TXS, block_with_txs
     )
 
 
 async def rpc_starnet_getClass(
+    node: NodeName,
     url: str,
     class_hash: models.query.ClassHash,
     block_hash: models.query.BlockHash = None,
@@ -302,10 +329,13 @@ async def rpc_starnet_getClass(
         class_hash, block_hash, to_block_number_or_tag(block_number, block_tag)
     )
 
-    return await json_rpc_starknet_py(RpcCall.STARKNET_GET_CLASS, class_by_hash)
+    return await json_rpc_starknet_py(
+        node, RpcCall.STARKNET_GET_CLASS, class_by_hash
+    )
 
 
 async def rpc_starknet_getClassAt(
+    node: NodeName,
     url: str,
     contract_address: models.query.ContractAddress,
     block_hash: models.query.BlockHash = None,
@@ -319,10 +349,13 @@ async def rpc_starknet_getClassAt(
         to_block_number_or_tag(block_number, block_tag),
     )
 
-    return await json_rpc_starknet_py(RpcCall.STARKNET_GET_CLASS_AT, class_at)
+    return await json_rpc_starknet_py(
+        node, RpcCall.STARKNET_GET_CLASS_AT, class_at
+    )
 
 
 async def rpc_starknet_getClassHashAt(
+    node: NodeName,
     url: str,
     contract_address: models.query.ContractAddress,
     block_hash: models.query.BlockHash = None,
@@ -337,12 +370,12 @@ async def rpc_starknet_getClassHashAt(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_CLASS_HASH_AT, class_hash
+        node, RpcCall.STARKNET_GET_CLASS_HASH_AT, class_hash
     )
 
 
 async def rcp_starknet_getEvents(
-    url: str, body: models.body.GetEvents
+    node: NodeName, url: str, body: models.body.GetEvents
 ) -> models.ResponseModelJSON[EventsChunk]:
     client = FullNodeClient(node_url=url)
     get_events = client.get_events(
@@ -357,10 +390,13 @@ async def rcp_starknet_getEvents(
         chunk_size=body.chunk_size,
     )
 
-    return await json_rpc_starknet_py(RpcCall.STARKNET_GET_EVENTS, get_events)
+    return await json_rpc_starknet_py(
+        node, RpcCall.STARKNET_GET_EVENTS, get_events
+    )
 
 
 async def rpc_starknet_getNonce(
+    node: NodeName,
     url: str,
     contract_address: models.query.ContractAddress,
     block_hash: models.query.BlockHash = None,
@@ -374,10 +410,11 @@ async def rpc_starknet_getNonce(
         to_block_number_or_tag(block_number, block_tag),
     )
 
-    return await json_rpc_starknet_py(RpcCall.STARKNET_GET_NONCE, nonce)
+    return await json_rpc_starknet_py(node, RpcCall.STARKNET_GET_NONCE, nonce)
 
 
 async def rpc_starknet_getStateUpdate(
+    node: NodeName,
     url: str,
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
@@ -389,11 +426,12 @@ async def rpc_starknet_getStateUpdate(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_STATE_UPDATE, state_update
+        node, RpcCall.STARKNET_GET_STATE_UPDATE, state_update
     )
 
 
 async def rpc_starknet_getStorageAt(
+    node: NodeName,
     url: str,
     contract_address: models.query.ContractAddress,
     key: models.query.ContractKey,
@@ -412,10 +450,13 @@ async def rpc_starknet_getStorageAt(
         to_block_number_or_tag(block_number, block_tag),
     )
 
-    return await json_rpc_starknet_py(RpcCall.STARKNET_GET_STORAGE_AT, storage)
+    return await json_rpc_starknet_py(
+        node, RpcCall.STARKNET_GET_STORAGE_AT, storage
+    )
 
 
 async def rpc_starknet_getTransactionByBlockIdAndIndex(
+    node: NodeName,
     url: str,
     index: int,
     block_hash: models.query.BlockHash = None,
@@ -428,59 +469,62 @@ async def rpc_starknet_getTransactionByBlockIdAndIndex(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX, tx
+        node, RpcCall.STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX, tx
     )
 
 
 async def rpc_starknet_getTransactionByHash(
-    url: str, tx_hash: models.query.TxHash
+    node: NodeName, url: str, tx_hash: models.query.TxHash
 ) -> models.ResponseModelJSON[Transaction]:
     client = FullNodeClient(node_url=url)
     tx = client.get_transaction(tx_hash)
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_TRANSACTION_BY_HASH, tx
+        node, RpcCall.STARKNET_GET_TRANSACTION_BY_HASH, tx
     )
 
 
 async def rpc_starknet_getTransactionReceipt(
-    url: str, tx_hash: models.query.TxHash
+    node: NodeName, url: str, tx_hash: models.query.TxHash
 ) -> models.ResponseModelJSON[TransactionReceipt]:
     client = FullNodeClient(node_url=url)
     tx_receipt = client.get_transaction_receipt(tx_hash)
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_TRANSACTION_RECEIPT, tx_receipt
+        node, RpcCall.STARKNET_GET_TRANSACTION_RECEIPT, tx_receipt
     )
 
 
 async def rpc_starknet_getTransactionStatus(
-    url: str, tx_hash: models.query.TxHash
+    node: NodeName, url: str, tx_hash: models.query.TxHash
 ) -> models.ResponseModelJSON[TransactionStatusResponse]:
     client = FullNodeClient(node_url=url)
     tx_status = client.get_transaction_status(tx_hash)
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_GET_TRANSACTION_STATUS, tx_status
+        node, RpcCall.STARKNET_GET_TRANSACTION_STATUS, tx_status
     )
 
 
-async def rpc_starknet_specVersion(url: str) -> models.ResponseModelJSON[str]:
+async def rpc_starknet_specVersion(
+    node: NodeName, url: str
+) -> models.ResponseModelJSON[str]:
     client = FullNodeClient(node_url=url)
     spec_version = client.spec_version()
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_SPEC_VERSION, spec_version
+        node, RpcCall.STARKNET_SPEC_VERSION, spec_version
     )
 
 
 async def rpc_starknet_syncing(
+    node: NodeName,
     url: str,
 ) -> models.ResponseModelJSON[bool | SyncStatus]:
     client = FullNodeClient(node_url=url)
     syncing = client.get_syncing_status()
 
-    return await json_rpc_starknet_py(RpcCall.STARKNET_SYNCING, syncing)
+    return await json_rpc_starknet_py(node, RpcCall.STARKNET_SYNCING, syncing)
 
 
 # =========================================================================== #
@@ -489,6 +533,7 @@ async def rpc_starknet_syncing(
 
 
 async def rpc_starknet_simulateTransactions(
+    node: NodeName,
     url: str,
     body: models.body.SimulateTransactions,
     block_hash: models.query.BlockHash = None,
@@ -505,11 +550,12 @@ async def rpc_starknet_simulateTransactions(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_SIMULATE_TRANSACTIONS, simulation
+        node, RpcCall.STARKNET_SIMULATE_TRANSACTIONS, simulation
     )
 
 
 async def rpc_starknet_traceBlockTransactions(
+    node: NodeName,
     url: str,
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
@@ -521,15 +567,18 @@ async def rpc_starknet_traceBlockTransactions(
     )
 
     return await json_rpc_starknet_py(
-        RpcCall.STARKNET_TRACE_BLOCK_TRANSACTIONS, trace_block_transactions
+        node,
+        RpcCall.STARKNET_TRACE_BLOCK_TRANSACTIONS,
+        trace_block_transactions,
     )
 
 
 async def rpc_starknet_traceTransaction(
-    url: str, tx_hash: models.query.TxHash
+    node: NodeName, url: str, tx_hash: models.query.TxHash
 ) -> models.ResponseModelJSON[Any]:
     # TODO: fix starknet-py `trace_transaction`
     return json_rpc(
+        node,
         url,
         RpcCall.STARKNET_TRACE_TRANSACTION,
         {"transaction_hash": tx_hash},

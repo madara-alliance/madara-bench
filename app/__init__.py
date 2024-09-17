@@ -190,7 +190,7 @@ async def starknet_blockHashAndNumber(
 ) -> models.ResponseModelJSON[BlockHashAndNumber]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_blockHashAndNumber(url)
+    return await rpc.rpc_starknet_blockHashAndNumber(node, url)
 
 
 @app.get(
@@ -203,7 +203,7 @@ async def starknet_blockNumber(
 ) -> models.ResponseModelJSON[int]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_blockNumber(url)
+    return await rpc.rpc_starknet_blockNumber(node, url)
 
 
 @app.post(
@@ -221,6 +221,7 @@ async def starknet_call(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_call(
+        node,
         url,
         call,
         block_hash,
@@ -239,7 +240,7 @@ async def starknet_chainId(
 ) -> models.ResponseModelJSON[str]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_chainId(url)
+    return await rpc.rpc_starknet_chainId(node, url)
 
 
 @app.post(
@@ -257,6 +258,7 @@ async def starknet_estimateFee(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_estimateFee(
+        node,
         url,
         body,
         block_hash,
@@ -280,6 +282,7 @@ async def starknet_estimateMessageFee(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_estimateMessageFee(
+        node,
         url,
         body,
         block_hash,
@@ -302,7 +305,7 @@ async def starknet_getBlockTransactionCount(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getBlockTransactionCount(
-        url, block_hash, block_number, block_tag
+        node, url, block_hash, block_number, block_tag
     )
 
 
@@ -322,6 +325,7 @@ async def starknet_getBlockWithReceipts(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getBlockWithReceipts(
+        node,
         url,
         block_hash,
         block_number,
@@ -345,6 +349,7 @@ async def starknet_getBlockWithTxHashes(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getBlockWithTxHashes(
+        node,
         url,
         block_hash,
         block_number,
@@ -366,6 +371,7 @@ async def starknet_getBlockWithTxs(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getBlockWithTxs(
+        node,
         url,
         block_hash,
         block_number,
@@ -388,6 +394,7 @@ async def starknet_getClass(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starnet_getClass(
+        node,
         url,
         class_hash,
         block_hash,
@@ -411,6 +418,7 @@ async def starknet_getClassAt(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getClassAt(
+        node,
         url,
         contract_address,
         block_hash,
@@ -434,6 +442,7 @@ async def starknet_getClassHashAt(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getClassHashAt(
+        node,
         url,
         contract_address,
         block_hash,
@@ -453,7 +462,7 @@ async def starknet_getEvents(
 ) -> models.ResponseModelJSON[EventsChunk]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rcp_starknet_getEvents(url, body)
+    return await rpc.rcp_starknet_getEvents(node, url, body)
 
 
 @app.get(
@@ -471,6 +480,7 @@ async def starknet_getNonce(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getNonce(
+        node,
         url,
         contract_address,
         block_hash,
@@ -493,6 +503,7 @@ async def starknet_getStateUpdate(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getStateUpdate(
+        node,
         url,
         block_hash,
         block_number,
@@ -516,6 +527,7 @@ async def starknet_getStorageAt(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getStorageAt(
+        node,
         url,
         contract_address,
         contract_key,
@@ -540,6 +552,7 @@ async def starknet_getTransactionByBlockIdAndIndex(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getTransactionByBlockIdAndIndex(
+        node,
         url,
         index,
         block_hash,
@@ -559,7 +572,9 @@ async def starknet_getTransactionByHash(
 ) -> models.ResponseModelJSON[Transaction]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_getTransactionByHash(url, transaction_hash)
+    return await rpc.rpc_starknet_getTransactionByHash(
+        node, url, transaction_hash
+    )
 
 
 @app.get(
@@ -573,7 +588,7 @@ async def starknet_getTransactionReceipt(
 ) -> models.ResponseModelJSON[TransactionReceipt]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_getTransactionReceipt(url, tx_hash)
+    return await rpc.rpc_starknet_getTransactionReceipt(node, url, tx_hash)
 
 
 @app.get(
@@ -587,7 +602,9 @@ async def starknet_getTransactionStatus(
 ) -> models.ResponseModelJSON[TransactionStatusResponse]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_getTransactionStatus(url, transaction_hash)
+    return await rpc.rpc_starknet_getTransactionStatus(
+        node, url, transaction_hash
+    )
 
 
 @app.get(
@@ -600,7 +617,7 @@ async def starknet_specVersion(
 ) -> models.ResponseModelJSON[str]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_specVersion(url)
+    return await rpc.rpc_starknet_specVersion(node, url)
 
 
 @app.get(
@@ -613,7 +630,7 @@ async def starknet_syncing(
 ) -> models.ResponseModelJSON[bool | SyncStatus]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_syncing(url)
+    return await rpc.rpc_starknet_syncing(node, url)
 
 
 # =========================================================================== #
@@ -636,7 +653,7 @@ async def starknet_simulateTransactions(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_simulateTransactions(
-        url, body, block_hash, block_number, block_tag
+        node, url, body, block_hash, block_number, block_tag
     )
 
 
@@ -654,7 +671,7 @@ async def starknet_traceBlockTransactions(
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_traceBlockTransactions(
-        url, block_hash, block_number, block_tag
+        node, url, block_hash, block_number, block_tag
     )
 
 
@@ -669,7 +686,7 @@ async def starknet_traceTransaction(
 ) -> models.ResponseModelJSON[Any]:
     container = stats.container_get(node)
     url = rpc.rpc_url(node, container)
-    return await rpc.rpc_starknet_traceTransaction(url, tx_hash)
+    return await rpc.rpc_starknet_traceTransaction(node, url, tx_hash)
 
 
 # =========================================================================== #
@@ -678,10 +695,10 @@ async def starknet_traceTransaction(
 
 
 @app.get("/info/docker/running", responses={**ERROR_CODES}, tags=[TAG_DEBUG])
-async def docker_get_running():
+async def docker_get_running() -> list[str]:
     """List all running container instances"""
     client = docker.client.from_env()
-    client.containers.list()
+    return [container.name for container in client.containers.list()]
 
 
 @app.get(
