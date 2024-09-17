@@ -2,10 +2,12 @@
 #                         STARKNET NODE BENCHMAR RUNNER                        #
 # ============================================================================ #
 
-NODES    := madara
+NODES    := madara juno
 IMGS     := $(addsuffix /image.tar.gz,$(NODES))
 VOLUMES  := $(addsuffix _runner_db,$(NODES))
-SECRETS  := secrets/rpc_api.secret secrets/gateway_key.secret
+SECRETS  := secrets/rpc_api.secret     \
+            secrets/rpc_api_ws.secret  \
+			secrets/gateway_key.secret
 
 # dim white italic
 TERTIARY := \033[2;3;37m
@@ -36,6 +38,16 @@ start: images $(SECRETS)
 	done
 	@echo -e "$(PASS)all services set up$(RESET)"
 
+.PHONY: start-madara
+start-madara: images $(SECRETS)
+	@echo -e "$(TERTIARY)running$(RESET) $(PASS)madara$(RESET)"
+	@docker-compose -f madara/compose.yaml up -d
+
+.PHONY: start-juno
+start-juno: images $(SECRETS)
+	@echo -e "$(TERTIARY)running$(RESET) $(PASS)juno$(RESET)"
+	@docker-compose -f juno/compose.yaml up -d
+
 .PHONY: stop
 stop:
 	@for node in $(NODES); do \
@@ -48,6 +60,11 @@ stop:
 logs-madara:
 	@echo -e "$(TERTIARY)logs for $(INFO)madara$(RESET)";
 	@docker-compose -f madara/compose.yaml logs -f;
+
+.PHONY: logs-juno
+logs-juno:
+	@echo -e "$(TERTIARY)logs for $(INFO)juno$(RESET)";
+	@docker-compose -f juno/compose.yaml logs -f;
 
 .PHONY: images
 images: $(IMGS)
@@ -83,11 +100,13 @@ debug:
 	@echo $(NODES)
 	@echo $(IMGS)
 
+.SECONDEXPANSION:
 %image.tar.gz: node = $(@D)
-%image.tar.gz: %default.nix
+%image.tar.gz: %Dockerfile %$$(node)-runner.sh
 	@echo -e "$(TERTIARY)building$(RESET) $(PASS)$(node)$(RESET)"
 	@docker image rm -f $(node):latest || true
 	@docker build -t $(node):latest $(node)
+	@docker image save -o $(node)/image.tar.gz $(node):latest
 
 #	Nix Image build has had to been remove following the introduction of scarb
 #	into the build process. This is because scarb needs to download depencies
