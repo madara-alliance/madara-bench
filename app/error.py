@@ -1,3 +1,5 @@
+from enum import Enum
+
 import fastapi
 import pydantic
 import requests
@@ -5,6 +7,12 @@ from docker.models.containers import Container
 from starknet_py.net.client_errors import ClientError
 
 from app import models
+
+
+class StarknetVersion(str, Enum):
+    V0_13_0 = "0.13.0"
+    V0_13_1 = "0.13.1"
+    V0_13_1_1 = "0.13.1.1"
 
 
 class ErrorMessage(pydantic.BaseModel):
@@ -35,24 +43,20 @@ class ErrorNodeNotFound(fastapi.HTTPException):
         )
 
 
+class ErrorUnsupportedDeploy(fastapi.HTTPException):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=fastapi.status.HTTP_406_NOT_ACCEPTABLE,
+            detail=("Deploy transactions are not supported"),
+        )
+
+
 class ErrorNodeNotRunning(fastapi.HTTPException):
     def __init__(self, node: models.NodeName) -> None:
         super().__init__(
             status_code=fastapi.status.HTTP_417_EXPECTATION_FAILED,
             detail=(
                 f"{node.name.capitalize()} node container is no longer running",
-            ),
-        )
-
-
-class ErrorCodePlumbing(fastapi.HTTPException):
-    def __init__(self, err: ClientError) -> None:
-        super().__init__(
-            status_code=fastapi.status.HTTP_418_IM_A_TEAPOT,
-            detail=(
-                "Sorry! This section of the code is under works, I'm aware of "
-                "it and working on a fix, please contact me. "
-                f"{err}"
             ),
         )
 
@@ -85,6 +89,42 @@ class ErrorNodeSilent(fastapi.HTTPException):
         )
 
 
-def container_check_running(node: models.NodeName, container: Container):
+class ErrorStarknetVersion(fastapi.HTTPException):
+    def __init__(
+        self,
+        method: str,
+        starknet_version: str,
+        starknet_version_min: StarknetVersion,
+    ) -> None:
+        super().__init__(
+            status_code=fastapi.status.HTTP_425_TOO_EARLY,
+            detail=(
+                f"Failed to call {method}, requires a minimum block version "
+                f"of {starknet_version_min.value}, got {starknet_version}"
+            ),
+        )
+
+
+class ErrorRpcCall(fastapi.HTTPException):
+    def __init__(
+        self, node: models.NodeName, method: str, e: ClientError
+    ) -> None:
+        super().__init__(
+            status_code=fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                f"{node.name.capitalize()} failed to call {method}, generated "
+                f"error: {e}"
+            ),
+        )
+
+
+def ensure_container_is_running(node: models.NodeName, container: Container):
     if container.status != "running":
         raise ErrorNodeNotRunning(node)
+
+
+def ensure_meet_version_requirements(
+    method: str, v: str, v_min: StarknetVersion
+):
+    if v < v_min:
+        raise ErrorStarknetVersion(method, v, v_min)

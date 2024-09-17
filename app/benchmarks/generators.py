@@ -24,21 +24,25 @@ from starknet_py.net.models.transaction import (
     InvokeV3,
 )
 
-from app import rpc
+from app import models, rpc
+
+GENERATE_RANGE: int = 1_000
+
 
 InputGenerator = AsyncGenerator[dict[str, Any], Any]
 
 
-async def latest_common_block_number(urls: list[str]) -> int:
+async def latest_common_block_number(urls: dict[models.NodeName, str]) -> int:
     block_numbers: list[int] = [
-        (await rpc.rpc_starknet_blockNumber(url)).output for url in urls
+        (await rpc.rpc_starknet_blockNumber(node, url)).output
+        for node, url in urls.items()
     ]
 
     return min(block_numbers)
 
 
 async def gen_starknet_getBlockWithTxs(
-    urls: list[str],
+    urls: dict[models.NodeName, str],
     interval: float,
 ) -> InputGenerator:
     while True:
@@ -47,20 +51,20 @@ async def gen_starknet_getBlockWithTxs(
 
 
 async def gen_starknet_getStorageAt(
-    urls: list[str], interval: float
+    urls: dict[models.NodeName, str], interval: float
 ) -> InputGenerator:
     """Generates a ramdom contract storage key
 
-    Key is taken from the state diffs over the last 100 common blocks. It is
+    Key is taken from the state diffs over the last 1000 common blocks. It is
     possible for a key to be generated that falls before that range in some
     rare cases where the random block to have been chose had no storage diffs
     """
-    client = FullNodeClient(node_url=urls[0])
+    client = FullNodeClient(node_url=next(iter(urls.values())))
 
     while True:
         block_number = await latest_common_block_number(urls)
         block_number = random.randrange(
-            max(block_number - 100, 0), block_number
+            max(block_number - GENERATE_RANGE, 0), block_number
         )
         state_update = await client.get_state_update(block_number=block_number)
 
@@ -82,20 +86,20 @@ async def gen_starknet_getStorageAt(
 
 
 async def gen_starknet_estimateFee(
-    urls: list[str], interval: float
+    urls: dict[models.NodeName, str], interval: float
 ) -> InputGenerator:
-    client = FullNodeClient(node_url=urls[0])
+    client = FullNodeClient(node_url=next(iter(urls.values())))
 
     while True:
         block_number = await latest_common_block_number(urls)
         block_number = random.randrange(
-            max(block_number - 100, 0), block_number
+            max(block_number - GENERATE_RANGE, 0), block_number
         )
         block = await client.get_block(block_number=block_number)
         transactions = block.transactions
 
         while len(transactions) == 0 or transactions[0].version == 0:
-            # FIX: this could failed if called too early in the sync
+            # FIX: this could fail if called too early in the sync
             block_number -= 1
             block = await client.get_block(block_number=block_number)
             transactions = block.transactions
@@ -173,29 +177,29 @@ async def gen_starknet_estimateFee(
                 contract_address_salt=tx.contract_address_salt,
                 constructor_calldata=tx.constructor_calldata,
             )
-        yield {"tx": tx, "block_number": block_number}
+        yield {"tx": tx, "block_number": block_number - 1}
         await asyncio.sleep(interval)
 
 
 async def gen_starknet_traceBlockTransactions(
-    urls: list[str], interval: float
+    urls: dict[models.NodeName, str], interval: float
 ) -> InputGenerator:
     while True:
         block_number = await latest_common_block_number(urls)
         block_number = random.randrange(
-            max(block_number - 100, 0), block_number
+            max(block_number - GENERATE_RANGE, 0), block_number
         )
         yield {"block_number": block_number}
         await asyncio.sleep(interval)
 
 
 async def gen_starknet_getBlockWithReceipts(
-    urls: list[str], interval: float
+    urls: dict[models.NodeName, str], interval: float
 ) -> InputGenerator:
     while True:
         block_number = await latest_common_block_number(urls)
         block_number = random.randrange(
-            max(block_number - 100, 0), block_number
+            max(block_number - GENERATE_RANGE, 0), block_number
         )
         yield {"block_number": block_number}
         await asyncio.sleep(interval)

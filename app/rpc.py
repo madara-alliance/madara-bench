@@ -6,6 +6,7 @@ from typing import Any, Coroutine, TypeVar
 
 import requests
 from docker.models.containers import Container
+from starknet_py.net.client_errors import ClientError
 from starknet_py.net.client_models import (
     BlockHashAndNumber,
     BlockStateUpdate,
@@ -31,7 +32,7 @@ from starknet_py.net.client_models import (
 from starknet_py.net.full_node_client import FullNodeClient
 from starknet_py.net.models.transaction import AccountTransaction
 
-from app import error, models
+from app import error, logging, models
 from app.models.models import NodeName
 
 RPC_PORT_MADARA: str = "9944/tcp"
@@ -40,6 +41,8 @@ DOCKER_HOST_PORT: str = "HostPort"
 DOCKER_HOST_IP: str = "HostIp"
 
 T = TypeVar("T")
+
+logger = logging.get_logger()
 
 
 class RpcCall(str, Enum):
@@ -104,12 +107,19 @@ def json_rpc(
 
 async def json_rpc_starknet_py(
     node: NodeName,
-    method: str,
+    method: RpcCall,
     caller: Coroutine[Any, Any, T],
 ) -> models.ResponseModelJSON:
     time_start = datetime.datetime.now()
     perf_start = time.perf_counter_ns()
-    output = await caller
+
+    try:
+        output = await caller
+    except ClientError as e:
+        logger.error(f"{node.name.capitalize()}: failed {method.value}")
+        logger.error(f"{node.name.capitalize()}: {e}")
+        raise error.ErrorRpcCall(node, method.value, e)
+
     perf_stop = time.perf_counter_ns()
     perf_delta = perf_stop - perf_start
 
@@ -133,7 +143,7 @@ def to_block_number_or_tag(
 
 
 def rpc_url(node: models.NodeName, container: Container) -> str:
-    error.container_check_running(node, container)
+    error.ensure_container_is_running(node, container)
 
     ports = container.ports
 
@@ -208,12 +218,21 @@ async def rpc_starknet_estimateFee(
     block_tag: models.query.BlockTag = None,
 ) -> models.ResponseModelJSON[EstimatedFee | list[EstimatedFee]]:
     client = FullNodeClient(node_url=url)
+    block_number_or_tag = to_block_number_or_tag(block_number, block_tag)
+    block = await client.get_block(block_hash, block_number_or_tag)
+
+    error.ensure_meet_version_requirements(
+        RpcCall.STARKNET_ESTIMATE_FEE,
+        block.starknet_version,
+        error.StarknetVersion.V0_13_1,
+    )
+
     estimate_fee = client.estimate_fee(
         typing.cast(AccountTransaction, tx),
         # TODO: make this an option
         True,
         block_hash,
-        to_block_number_or_tag(block_number, block_tag),
+        block_number_or_tag,
     )
 
     return await json_rpc_starknet_py(
@@ -230,6 +249,15 @@ async def rpc_starknet_estimateMessageFee(
     block_tag: models.query.BlockTag = None,
 ) -> models.ResponseModelJSON[EstimatedFee]:
     client = FullNodeClient(node_url=url)
+    block_number_or_tag = to_block_number_or_tag(block_number, block_tag)
+    block = await client.get_block(block_hash, block_number_or_tag)
+
+    error.ensure_meet_version_requirements(
+        RpcCall.STARKNET_ESTIMATE_FEE,
+        block.starknet_version,
+        error.StarknetVersion.V0_13_1,
+    )
+
     estimage_message_fee = client.estimate_message_fee(
         body.from_address,
         body.to_address,
@@ -541,6 +569,15 @@ async def rpc_starknet_simulateTransactions(
     block_tag: models.query.BlockTag = None,
 ) -> models.ResponseModelJSON[list[SimulatedTransaction]]:
     client = FullNodeClient(node_url=url)
+    block_number_or_tag = to_block_number_or_tag(block_number, block_tag)
+    block = await client.get_block(block_hash, block_number_or_tag)
+
+    error.ensure_meet_version_requirements(
+        RpcCall.STARKNET_ESTIMATE_FEE,
+        block.starknet_version,
+        error.StarknetVersion.V0_13_1,
+    )
+
     simulation = client.simulate_transactions(
         typing.cast(list[AccountTransaction], body.transactions),
         body.skip_validate,
@@ -562,6 +599,15 @@ async def rpc_starknet_traceBlockTransactions(
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[list[BlockTransactionTrace]]:
     client = FullNodeClient(node_url=url)
+    block_number_or_tag = to_block_number_or_tag(block_number, block_tag)
+    block = await client.get_block(block_hash, block_number_or_tag)
+
+    error.ensure_meet_version_requirements(
+        RpcCall.STARKNET_ESTIMATE_FEE,
+        block.starknet_version,
+        error.StarknetVersion.V0_13_1,
+    )
+
     trace_block_transactions = client.trace_block_transactions(
         block_hash, to_block_number_or_tag(block_number, block_tag)
     )

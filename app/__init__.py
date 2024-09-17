@@ -41,15 +41,12 @@ ERROR_CODES: dict[int, dict[str, Any]] = {
         "description": "The node could not be found",
         "model": error.ErrorMessage,
     },
-    fastapi.status.HTTP_417_EXPECTATION_FAILED: {
-        "description": "Node exists but is not running",
+    fastapi.status.HTTP_406_NOT_ACCEPTABLE: {
+        "description": "Method was called with an invalid transaction type",
         "model": error.ErrorMessage,
     },
-    fastapi.status.HTTP_418_IM_A_TEAPOT: {
-        "description": (
-            "Beware there be dragons, this section of the code is still under "
-            "development"
-        ),
+    fastapi.status.HTTP_417_EXPECTATION_FAILED: {
+        "description": "Node exists but is not running",
         "model": error.ErrorMessage,
     },
     fastapi.status.HTTP_422_UNPROCESSABLE_ENTITY: {
@@ -58,6 +55,17 @@ ERROR_CODES: dict[int, dict[str, Any]] = {
     },
     fastapi.status.HTTP_424_FAILED_DEPENDENCY: {
         "description": "Node exists but did not respond",
+        "model": error.ErrorMessage,
+    },
+    fastapi.status.HTTP_425_TOO_EARLY: {
+        "description": (
+            "Method was called on a block with an incompatible starknet "
+            "version"
+        ),
+        "model": error.ErrorMessage,
+    },
+    fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR: {
+        "description": "RPC call failed on the node side",
         "model": error.ErrorMessage,
     },
 }
@@ -95,13 +103,6 @@ async def exception_handler_requests_json_decode_error(
         str(request.url).removeprefix(str(request.base_url)).partition("?")[0]
     )
     raise error.ErrorJsonDecode(request.path_params["node"], api_call, err)
-
-
-@app.exception_handler(ClientError)
-async def exception_handler_starknet_py_client_error(
-    _: fastapi.Request, err: ClientError
-):
-    raise error.ErrorCodePlumbing(err)
 
 
 # =========================================================================== #
@@ -163,14 +164,10 @@ async def benchmark_rpc(
     samples: models.query.TestSamples = 10,
     interval: models.query.TestInterval = 100,
 ) -> models.ResponseModelBench:
-    # containers = [(node, stats.container_get(node)) for node in models.NodeName]
-    # urls = [rpc.rpc_url(node, container) for (node, container) in containers]
-
-    containers = [
-        (node, stats.container_get(node))
-        for node in [models.NodeName.MADARA, models.NodeName.MADARA]
-    ]
-    urls = [rpc.rpc_url(node, container) for (node, container) in containers]
+    containers = [(node, stats.container_get(node)) for node in models.NodeName]
+    urls = {
+        node: rpc.rpc_url(node, container) for (node, container) in containers
+    }
 
     return await benchmarks.benchmark(urls, rpc_call, samples, interval)
 

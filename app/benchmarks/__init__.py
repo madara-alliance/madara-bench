@@ -41,7 +41,9 @@ from . import generators
 
 @dataclass
 class BenchmarkTools:
-    input_generator: Callable[[list[str], float], generators.InputGenerator]
+    input_generator: Callable[
+        [dict[models.NodeName, str], float], generators.InputGenerator
+    ]
     runner: Callable[..., Coroutine[Any, Any, Any]]
 
 
@@ -72,7 +74,7 @@ TO_MILLIS: float = 0.001
 
 
 async def benchmark(
-    urls: list[str],
+    urls: dict[models.NodeName, str],
     rpc_call: rpc.RpcCall,
     samples: int,
     interval: int,
@@ -96,10 +98,11 @@ async def benchmark(
     # python loops are slow so we use list comprehension instead
     inputs = [await anext(generator) for _ in range(samples)]
 
-    futures_layered = [
-        [tool.runner(url, **input) for input in inputs] for url in urls
+    futures = [
+        [tool.runner(node, url, **input) for input in inputs]
+        for node, url in urls.items()
     ]
-    results = [await asyncio.gather(*futures) for futures in futures_layered]
+    results = [await asyncio.gather(*futures) for futures in futures]
 
     node = [resp[0].node for resp in results]
     when = [min([resp.when for resp in resps]) for resps in results]

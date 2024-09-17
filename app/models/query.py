@@ -88,7 +88,7 @@ TestInterval = Annotated[
     int,
     fastapi.Query(
         ge=0,
-        le=100,
+        le=1000,
         description=("Interval between subsequent tests, in milliseconds"),
     ),
 ]
