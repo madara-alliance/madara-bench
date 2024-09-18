@@ -24,7 +24,6 @@ from starknet_py.net.client_models import (
     StarknetBlockWithTxHashes,
     SyncStatus,
     Tag,
-    Transaction,
     TransactionReceipt,
     TransactionStatusResponse,
 )
@@ -36,6 +35,7 @@ from app.models.models import NodeName
 
 RPC_PORT_MADARA: str = "9944/tcp"
 RPC_PORT_JUNO: str = "6060/tcp"
+RPC_PORT_PATHFINDER: str = "9545/tcp"
 DOCKER_HOST_PORT: str = "HostPort"
 DOCKER_HOST_IP: str = "HostIp"
 
@@ -123,6 +123,11 @@ def rpc_url(node: models.NodeName, container: DockerContainer) -> str:
             ip = port_info[DOCKER_HOST_IP]
             port = port_info[DOCKER_HOST_PORT]
             return f"http://{ip}:{port}"
+        case models.NodeName.PATHFINDER:
+            port_info = ports[RPC_PORT_PATHFINDER][0]
+            ip = port_info[DOCKER_HOST_IP]
+            port = port_info[DOCKER_HOST_PORT]
+            return f"http://{ip}:{port}"
 
 
 # =========================================================================== #
@@ -181,7 +186,7 @@ async def rpc_starknet_chainId(
 async def rpc_starknet_estimateFee(
     node: NodeName,
     url: str,
-    tx: models.body.Tx | list[models.body.Tx],
+    tx: models.body.TxIn | list[models.body.TxIn],
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = None,
@@ -193,7 +198,7 @@ async def rpc_starknet_estimateFee(
     error.ensure_meet_version_requirements(
         models.RpcCall.STARKNET_ESTIMATE_FEE,
         block.starknet_version,
-        error.StarknetVersion.V0_13_1,
+        error.StarknetVersion.V0_13_1_1,
     )
 
     estimate_fee = client.estimate_fee(
@@ -222,9 +227,9 @@ async def rpc_starknet_estimateMessageFee(
     block = await client.get_block(block_hash, block_number_or_tag)
 
     error.ensure_meet_version_requirements(
-        models.RpcCall.STARKNET_ESTIMATE_FEE,
+        models.RpcCall.STARKNET_ESTIMATE_MESSAGE_FEE,
         block.starknet_version,
-        error.StarknetVersion.V0_13_1,
+        error.StarknetVersion.V0_13_1_1,
     )
 
     estimage_message_fee = client.estimate_message_fee(
@@ -467,7 +472,7 @@ async def rpc_starknet_getTransactionByBlockIdAndIndex(
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = None,
-) -> models.ResponseModelJSON[Transaction]:
+) -> models.ResponseModelJSON[models.body.TxOut]:
     client = FullNodeClient(node_url=url)
     tx = client.get_transaction_by_block_id(
         index, block_hash, to_block_number_or_tag(block_number, block_tag)
@@ -480,7 +485,7 @@ async def rpc_starknet_getTransactionByBlockIdAndIndex(
 
 async def rpc_starknet_getTransactionByHash(
     node: NodeName, url: str, tx_hash: models.query.TxHash
-) -> models.ResponseModelJSON[Transaction]:
+) -> models.ResponseModelJSON[models.body.TxOut]:
     client = FullNodeClient(node_url=url)
     tx = client.get_transaction(tx_hash)
 
@@ -552,9 +557,9 @@ async def rpc_starknet_simulateTransactions(
     block = await client.get_block(block_hash, block_number_or_tag)
 
     error.ensure_meet_version_requirements(
-        models.RpcCall.STARKNET_ESTIMATE_FEE,
+        models.RpcCall.STARKNET_SIMULATE_TRANSACTIONS,
         block.starknet_version,
-        error.StarknetVersion.V0_13_1,
+        error.StarknetVersion.V0_13_1_1,
     )
 
     simulation = client.simulate_transactions(
@@ -582,9 +587,9 @@ async def rpc_starknet_traceBlockTransactions(
     block = await client.get_block(block_hash, block_number_or_tag)
 
     error.ensure_meet_version_requirements(
-        models.RpcCall.STARKNET_ESTIMATE_FEE,
+        models.RpcCall.STARKNET_TRACE_BLOCK_TRANSACTIONS,
         block.starknet_version,
-        error.StarknetVersion.V0_13_1,
+        error.StarknetVersion.V0_13_1_1,
     )
 
     trace_block_transactions = client.trace_block_transactions(

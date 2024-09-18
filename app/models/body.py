@@ -1,5 +1,17 @@
 import fastapi
-from starknet_py.net.client_models import Call, Hash
+from starknet_py.net.client_models import (
+    Call,
+    DeclareTransactionV0,
+    DeclareTransactionV1,
+    DeclareTransactionV2,
+    DeclareTransactionV3,
+    DeployAccountTransactionV1,
+    DeployAccountTransactionV3,
+    Hash,
+    InvokeTransactionV0,
+    InvokeTransactionV1,
+    InvokeTransactionV3,
+)
 from starknet_py.net.models.transaction import (
     DeclareV1,
     DeclareV2,
@@ -14,13 +26,28 @@ from app.models.query import BlockHash, BlockNumber
 
 from .models import *
 
-TxInvoke = Annotated[InvokeV1 | InvokeV3, fastapi.Body()]
+TxInvokeIn = Annotated[InvokeV1 | InvokeV3, fastapi.Body()]
+TxInvokeOut = Annotated[
+    InvokeTransactionV0 | InvokeTransactionV1 | InvokeTransactionV3,
+    fastapi.Body(),
+]
 
-TxDeclare = Annotated[DeclareV1 | DeclareV2 | DeclareV3, fastapi.Body()]
+TxDeclareIn = Annotated[DeclareV1 | DeclareV2 | DeclareV3, fastapi.Body()]
+TxDeclareOut = Annotated[
+    DeclareTransactionV0
+    | DeclareTransactionV1
+    | DeclareTransactionV2
+    | DeclareTransactionV3,
+    fastapi.Body(),
+]
 
-TxDeploy = Annotated[DeployAccountV1 | DeployAccountV3, fastapi.Body()]
+TxDeployIn = Annotated[DeployAccountV1 | DeployAccountV3, fastapi.Body()]
+TxDeployOut = Annotated[
+    DeployAccountTransactionV1 | DeployAccountTransactionV3, fastapi.Body()
+]
 
-Tx = Annotated[TxInvoke | TxDeclare | TxDeploy, fastapi.Body()]
+TxIn = Annotated[TxInvokeIn | TxDeclareIn | TxDeployIn, fastapi.Body()]
+TxOut = Annotated[TxInvokeOut | TxDeclareOut | TxDeployOut, fastapi.Body()]
 
 
 Call = Annotated[Call, fastapi.Body(include_in_schema=False)]
@@ -123,7 +150,7 @@ GetEvents = Annotated[_BodyGetEvents, fastapi.Body(include_in_schema=False)]
 
 class _BodySimulateTransactions(pydantic.BaseModel):
     transactions: Annotated[
-        list[Tx],
+        list[TxIn],
         pydantic.Field(
             description="The transactions to simulate",
         ),

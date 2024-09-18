@@ -163,9 +163,9 @@ async def node_get_cpu(
 
     match format:
         case models.CpuResultFormat.CPU:
-            return await system.system_cpu_system(node, container)
-        case models.CpuResultFormat.SYSTEM:
             return await system.system_cpu_normalized(node, container)
+        case models.CpuResultFormat.SYSTEM:
+            return await system.system_cpu_system(node, container)
 
 
 @app.get("/system/memory/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM])
@@ -273,7 +273,7 @@ async def starknet_chainId(
 )
 async def starknet_estimateFee(
     node: models.NodeName,
-    body: models.body.Tx | list[models.body.Tx],
+    body: models.body.TxIn | list[models.body.TxIn],
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
@@ -571,7 +571,7 @@ async def starknet_getTransactionByBlockIdAndIndex(
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
-) -> models.ResponseModelJSON[Transaction]:
+) -> models.ResponseModelJSON[models.body.TxOut]:
     container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getTransactionByBlockIdAndIndex(
@@ -592,7 +592,7 @@ async def starknet_getTransactionByBlockIdAndIndex(
 async def starknet_getTransactionByHash(
     node: models.NodeName,
     transaction_hash: models.query.TxHash,
-) -> models.ResponseModelJSON[Transaction]:
+) -> models.ResponseModelJSON[models.body.TxOut]:
     container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getTransactionByHash(

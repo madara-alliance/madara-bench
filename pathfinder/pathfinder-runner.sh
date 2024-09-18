@@ -4,6 +4,7 @@ export GATEWAY_KEY=$(cat $GATEWAY_KEY_FILE)
 
 ./pathfinder                          \
 	--data-directory /data/pathfinder \
+	--storage.state-tries archive     \
 	--network sepolia-testnet         \
 	--http-rpc 0.0.0.0:9545           \
 	--rpc.cors-domains "*"            \

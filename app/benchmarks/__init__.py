@@ -161,7 +161,11 @@ async def benchmark_system(
     node = [resp[0].node for resp in results]
     when = [min([resp.when for resp in resps]) for resps in results]
     value = [[resp.value for resp in resps] for resps in results]
-    value_avg = [sum(all) / len(all) for all in value]
+
+    if value[0][0] is int:
+        value_avg = [sum(all) // len(all) for all in value]
+    else:
+        value_avg = [sum(all) / len(all) for all in value]
 
     return [
         models.ResponseModelSystem(node=node, when=when, value=value)

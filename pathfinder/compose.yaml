@@ -1,4 +1,4 @@
-name: madara_runner
+name: pathfinder_runner
 
 services:
   madara:

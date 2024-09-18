@@ -83,6 +83,7 @@ class NodeName(str, Enum):
 
     MADARA = "madara"
     JUNO = "juno"
+    PATHFINDER = "pathfinder"
 
 
 class CpuResultFormat(str, Enum):
