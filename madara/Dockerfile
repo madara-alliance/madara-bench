@@ -1,12 +1,10 @@
 # Stage 1: Build the application
 FROM rust:1.78 AS builder
+WORKDIR /usr/src/
 
 # Install build dependencies
 RUN apt-get -y update            && \
     apt-get install -y clang git
-
-# Set the working directory
-WORKDIR /usr/src/
 
 # Downloading madara from Sep 12, 2024
 # https://github.com/madara-alliance/madara/commit/d45dc388bbb62de8e715014d18f2bca93dfa198e

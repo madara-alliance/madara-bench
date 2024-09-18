@@ -2,7 +2,7 @@
 #                         STARKNET NODE BENCHMAR RUNNER                        #
 # ============================================================================ #
 
-NODES    := madara juno
+NODES    := madara juno pathfinder
 IMGS     := $(addsuffix /image.tar.gz,$(NODES))
 VOLUMES  := $(addsuffix _runner_db,$(NODES))
 SECRETS  := secrets/rpc_api.secret     \
@@ -30,14 +30,6 @@ all: help
 help:
 	@echo "TODO(help)"
 
-.PHONY: start
-start: images $(SECRETS)
-	@for node in $(NODES); do \
-		echo -e "$(TERTIARY)running$(RESET) $(PASS)$$node$(RESET)"; \
-		docker-compose -f $$node/compose.yaml up -d; \
-	done
-	@echo -e "$(PASS)all services set up$(RESET)"
-
 .PHONY: start-madara
 start-madara: images $(SECRETS)
 	@echo -e "$(TERTIARY)running$(RESET) $(PASS)madara$(RESET)"
@@ -48,12 +40,32 @@ start-juno: images $(SECRETS)
 	@echo -e "$(TERTIARY)running$(RESET) $(PASS)juno$(RESET)"
 	@docker-compose -f juno/compose.yaml up -d
 
+.PHONY: start-pathfinder
+start-pathfinder: images $(SECRETS)
+	@echo -e "$(TERTIARY)running$(RESET) $(PASS)pathfinder$(RESET)"
+	@docker-compose -f pathfinder/compose.yaml up -d
+
+.PHONY: start
+start: start-madara start-juno start-pathfinder
+	@echo -e "$(PASS)all services set up$(RESET)"
+
+.PHONY: stop-madara
+stop-madara:
+	echo -e "$(TERTIARY)stopping $(WARN)madara$(RESET)"; \
+	docker-compose -f madara/compose.yaml stop; \
+
+.PHONY: stop-juno
+stop-juno:
+	echo -e "$(TERTIARY)stopping $(WARN)juno$(RESET)"; \
+	docker-compose -f juno/compose.yaml stop; \
+
+.PHONY: stop-pathfinder
+stop-pathfinder:
+	echo -e "$(TERTIARY)stopping $(WARN)pathfinder$(RESET)"; \
+	docker-compose -f pathfinder/compose.yaml stop; \
+
 .PHONY: stop
-stop:
-	@for node in $(NODES); do \
-		echo -e "$(TERTIARY)stopping $(WARN)$$node$(RESET)"; \
-		docker-compose -f $$node/compose.yaml stop; \
-	done
+stop: stop-madara stop-juno stop-pathfinder
 	@echo -e "$(WARN)all services stopped$(RESET)"
 
 .PHONY: logs-madara
@@ -65,6 +77,11 @@ logs-madara:
 logs-juno:
 	@echo -e "$(TERTIARY)logs for $(INFO)juno$(RESET)";
 	@docker-compose -f juno/compose.yaml logs -f;
+
+.PHONY: logs-pathfinder
+logs-pathfinder:
+	@echo -e "$(TERTIARY)logs for $(INFO)pathfinder$(RESET)";
+	@docker-compose -f pathfinder/compose.yaml logs -f;
 
 .PHONY: images
 images: $(IMGS)
@@ -86,6 +103,18 @@ fclean: clean
 		docker volume rm -f $$volume; \
 	done
 	@echo -e "$(WARN)artefacts cleaned$(RESET)"
+
+.PHONY: restart-madara
+restart-madara: clean
+	@make --silent start-madara
+
+.PHONY: restart-juno
+restart-juno: clean
+	@make --silent start-juno
+
+.PHONY: restart-pathfinder
+restart-pathfinder: clean
+	@make --silent start-pathfinder
 
 .PHONY: restart
 restart: clean
