@@ -1,10 +1,10 @@
+from enum import Enum
 from typing import Any
 
 import docker
 import fastapi
 import requests
 from docker import errors as docker_errors
-from starknet_py.net.client_errors import ClientError
 from starknet_py.net.client_models import (
     BlockHashAndNumber,
     BlockStateUpdate,
@@ -27,7 +27,7 @@ from starknet_py.net.client_models import (
     TransactionStatusResponse,
 )
 
-from app import benchmarks, error, logging, models, rpc, stats
+from app import benchmarks, error, logging, models, rpc, system
 
 MADARA: str = "madara_runner"
 MADARA_DB: str = "madara_runner_db"
@@ -71,11 +71,13 @@ ERROR_CODES: dict[int, dict[str, Any]] = {
 }
 
 
-TAG_READ: str = "read"
-TAG_TRACE: str = "trace"
-TAG_WRITE: str = "write"
-TAG_BENCH: str = "bench"
-TAG_DEBUG: str = "debug"
+class Tags(str, Enum):
+    BENCH = "bench"
+    SYSTEM = "system"
+    READ = "read"
+    TRACE = "trace"
+    DEBUG = "debug"
+
 
 logger = logging.get_logger()
 app = fastapi.FastAPI()
@@ -110,11 +112,45 @@ async def exception_handler_requests_json_decode_error(
 # =========================================================================== #
 
 
-@app.get("/bench/cpu/{node}", responses={**ERROR_CODES}, tags=[TAG_BENCH])
+@app.get("/bench/system/", responses={**ERROR_CODES}, tags=[Tags.BENCH])
+async def benchmark_system(
+    metrics: models.SystemMetric,
+    samples: models.query.TestSamples = 10,
+    interval: models.query.TestInterval = 100,
+) -> list[models.ResponseModelSystem]:
+    containers = {node: system.container_get(node) for node in models.NodeName}
+
+    return await benchmarks.benchmark_system(
+        containers, metrics, samples, interval
+    )
+
+
+@app.get("/bench/rpc/", responses={**ERROR_CODES}, tags=[Tags.BENCH])
+async def benchmark_rpc(
+    rpc_call: models.RpcCallBench,
+    samples: models.query.TestSamples = 10,
+    interval: models.query.TestInterval = 100,
+) -> models.ResponseModelBenchRpc:
+    containers = [
+        (node, system.container_get(node)) for node in models.NodeName
+    ]
+    urls = {
+        node: rpc.rpc_url(node, container) for (node, container) in containers
+    }
+
+    return await benchmarks.benchmark_rpc(urls, rpc_call, samples, interval)
+
+
+# =========================================================================== #
+#                                SYSTEM METRICS                               #
+# =========================================================================== #
+
+
+@app.get("/system/cpu/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM])
 async def node_get_cpu(
     node: models.NodeName,
-    system: models.query.System = False,
-) -> models.ResponseModelStats[float]:
+    format: models.CpuResultFormat = models.CpuResultFormat.CPU,
+) -> models.ResponseModelSystem[float]:
     """## Get node CPU usage.
 
     Return format depends on the value of `system`, but will default to a
@@ -123,30 +159,34 @@ async def node_get_cpu(
     entire system.
     """
 
-    container = stats.container_get(node)
-    if system:
-        return stats.stats_cpu_system(node, container)
-    else:
-        return stats.stats_cpu_normalized(node, container)
+    container = system.container_get(node)
+
+    match format:
+        case models.CpuResultFormat.CPU:
+            return await system.system_cpu_system(node, container)
+        case models.CpuResultFormat.SYSTEM:
+            return await system.system_cpu_normalized(node, container)
 
 
-@app.get("/bench/memory/{node}", responses={**ERROR_CODES}, tags=[TAG_BENCH])
+@app.get("/system/memory/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM])
 async def node_get_memory(
     node: models.NodeName,
-) -> models.ResponseModelStats[int]:
+) -> models.ResponseModelSystem[int]:
     """## Get node memory usage.
 
     Fetches the amount of ram used by the node. Result will be in _bytes_.
     """
 
-    container = stats.container_get(node)
-    return stats.stats_memory(node, container)
+    container = system.container_get(node)
+    return await system.system_memory(node, container)
 
 
-@app.get("/bench/storage/{node}", responses={**ERROR_CODES}, tags=[TAG_BENCH])
+@app.get(
+    "/system/storage/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM]
+)
 async def node_get_storage(
     node: models.NodeName,
-) -> models.ResponseModelStats[int]:
+) -> models.ResponseModelSystem[int]:
     """## Returns node storage usage
 
     Fetches the amount of space the node database is currently taking up. This
@@ -154,22 +194,8 @@ async def node_get_storage(
     set up. Result will be in _bytes_.
     """
 
-    container = stats.container_get(node)
-    return stats.stats_storage(node, container)
-
-
-@app.get("/bench/rpc/{node}", responses={**ERROR_CODES}, tags=[TAG_BENCH])
-async def benchmark_rpc(
-    rpc_call: rpc.RpcCall,
-    samples: models.query.TestSamples = 10,
-    interval: models.query.TestInterval = 100,
-) -> models.ResponseModelBench:
-    containers = [(node, stats.container_get(node)) for node in models.NodeName]
-    urls = {
-        node: rpc.rpc_url(node, container) for (node, container) in containers
-    }
-
-    return await benchmarks.benchmark(urls, rpc_call, samples, interval)
+    container = system.container_get(node)
+    return await system.system_storage(node, container)
 
 
 # =========================================================================== #
@@ -180,12 +206,12 @@ async def benchmark_rpc(
 @app.get(
     "/info/rpc/starknet_blockHashAndNumber/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_blockHashAndNumber(
     node: models.NodeName,
 ) -> models.ResponseModelJSON[BlockHashAndNumber]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_blockHashAndNumber(node, url)
 
@@ -193,12 +219,12 @@ async def starknet_blockHashAndNumber(
 @app.get(
     "/info/rpc/starknet_blockNumber/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_blockNumber(
     node: models.NodeName,
 ) -> models.ResponseModelJSON[int]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_blockNumber(node, url)
 
@@ -206,7 +232,7 @@ async def starknet_blockNumber(
 @app.post(
     "/info/rpc/starknet_call/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_call(
     node: models.NodeName,
@@ -215,7 +241,7 @@ async def starknet_call(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[list[int]]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_call(
         node,
@@ -230,12 +256,12 @@ async def starknet_call(
 @app.get(
     "/info/rpc/starknet_chainId/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_chainId(
     node: models.NodeName,
 ) -> models.ResponseModelJSON[str]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_chainId(node, url)
 
@@ -243,7 +269,7 @@ async def starknet_chainId(
 @app.post(
     "/info/rpc/starknet_estimateFee/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_estimateFee(
     node: models.NodeName,
@@ -252,7 +278,7 @@ async def starknet_estimateFee(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[EstimatedFee | list[EstimatedFee]]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_estimateFee(
         node,
@@ -267,7 +293,7 @@ async def starknet_estimateFee(
 @app.post(
     "/info/rpc/starknet_estimateMessageFee/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_estimateMessageFee(
     node: models.NodeName,
@@ -276,7 +302,7 @@ async def starknet_estimateMessageFee(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[EstimatedFee]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_estimateMessageFee(
         node,
@@ -291,7 +317,7 @@ async def starknet_estimateMessageFee(
 @app.get(
     "/info/rpc/starknet_getBlockTransactionCount/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getBlockTransactionCount(
     node: models.NodeName,
@@ -299,7 +325,7 @@ async def starknet_getBlockTransactionCount(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[int]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getBlockTransactionCount(
         node, url, block_hash, block_number, block_tag
@@ -309,7 +335,7 @@ async def starknet_getBlockTransactionCount(
 @app.get(
     "/info/rpc/starknet_getBlockWithReceipts/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getBlockWithReceipts(
     node: models.NodeName,
@@ -319,7 +345,7 @@ async def starknet_getBlockWithReceipts(
 ) -> models.ResponseModelJSON[
     PendingStarknetBlockWithReceipts | StarknetBlockWithReceipts
 ]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getBlockWithReceipts(
         node,
@@ -333,7 +359,7 @@ async def starknet_getBlockWithReceipts(
 @app.get(
     "/info/rpc/starknet_getBlockWithTxHashes/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getBlockWithTxHashes(
     node: models.NodeName,
@@ -343,7 +369,7 @@ async def starknet_getBlockWithTxHashes(
 ) -> models.ResponseModelJSON[
     PendingStarknetBlockWithTxHashes | StarknetBlockWithTxHashes
 ]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getBlockWithTxHashes(
         node,
@@ -357,7 +383,7 @@ async def starknet_getBlockWithTxHashes(
 @app.get(
     "/info/rpc/starknet_getBlockWithTxs/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getBlockWithTxs(
     node: models.NodeName,
@@ -365,7 +391,7 @@ async def starknet_getBlockWithTxs(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[PendingStarknetBlock | StarknetBlock]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getBlockWithTxs(
         node,
@@ -379,7 +405,7 @@ async def starknet_getBlockWithTxs(
 @app.get(
     "/info/rpc/starknet_getClass/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getClass(
     node: models.NodeName,
@@ -388,7 +414,7 @@ async def starknet_getClass(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[SierraContractClass | DeprecatedContractClass]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starnet_getClass(
         node,
@@ -403,7 +429,7 @@ async def starknet_getClass(
 @app.get(
     "/info/rpc/starknet_getClassAt/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getClassAt(
     node: models.NodeName,
@@ -412,7 +438,7 @@ async def starknet_getClassAt(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[SierraContractClass | DeprecatedContractClass]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getClassAt(
         node,
@@ -427,7 +453,7 @@ async def starknet_getClassAt(
 @app.get(
     "/info/rpc/starknet_getClassHashAt/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getClassHashAt(
     node: models.NodeName,
@@ -436,7 +462,7 @@ async def starknet_getClassHashAt(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[int]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getClassHashAt(
         node,
@@ -451,13 +477,13 @@ async def starknet_getClassHashAt(
 @app.post(
     "/info/rpc/starknet_getEvents/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getEvents(
     node: models.NodeName,
     body: models.body.GetEvents,
 ) -> models.ResponseModelJSON[EventsChunk]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rcp_starknet_getEvents(node, url, body)
 
@@ -465,7 +491,7 @@ async def starknet_getEvents(
 @app.get(
     "/info/rpc/starknet_getNonce/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getNonce(
     node: models.NodeName,
@@ -474,7 +500,7 @@ async def starknet_getNonce(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[int]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getNonce(
         node,
@@ -489,7 +515,7 @@ async def starknet_getNonce(
 @app.get(
     "/info/rpc/starknet_getStateUpdate/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getStateUpdate(
     node: models.NodeName,
@@ -497,7 +523,7 @@ async def starknet_getStateUpdate(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[PendingBlockStateUpdate | BlockStateUpdate]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getStateUpdate(
         node,
@@ -511,7 +537,7 @@ async def starknet_getStateUpdate(
 @app.get(
     "/info/rpc/starknet_getStorageAt/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getStorageAt(
     node: models.NodeName,
@@ -521,7 +547,7 @@ async def starknet_getStorageAt(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[int]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getStorageAt(
         node,
@@ -537,7 +563,7 @@ async def starknet_getStorageAt(
 @app.get(
     "/info/rpc/starknet_getTransactionByBlockIdAndIndex/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getTransactionByBlockIdAndIndex(
     node: models.NodeName,
@@ -546,7 +572,7 @@ async def starknet_getTransactionByBlockIdAndIndex(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[Transaction]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getTransactionByBlockIdAndIndex(
         node,
@@ -561,13 +587,13 @@ async def starknet_getTransactionByBlockIdAndIndex(
 @app.get(
     "/info/rpc/starknet_getTransactionByHash/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getTransactionByHash(
     node: models.NodeName,
     transaction_hash: models.query.TxHash,
 ) -> models.ResponseModelJSON[Transaction]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getTransactionByHash(
         node, url, transaction_hash
@@ -577,13 +603,13 @@ async def starknet_getTransactionByHash(
 @app.get(
     "/info/rpc/starknet_getTransactionReceipt/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getTransactionReceipt(
     node: models.NodeName,
     tx_hash: models.query.TxHash,
 ) -> models.ResponseModelJSON[TransactionReceipt]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getTransactionReceipt(node, url, tx_hash)
 
@@ -591,13 +617,13 @@ async def starknet_getTransactionReceipt(
 @app.get(
     "/info/rpc/starknet_getTransactionStatus/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_getTransactionStatus(
     node: models.NodeName,
     transaction_hash: models.query.TxHash,
 ) -> models.ResponseModelJSON[TransactionStatusResponse]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_getTransactionStatus(
         node, url, transaction_hash
@@ -607,12 +633,12 @@ async def starknet_getTransactionStatus(
 @app.get(
     "/info/rpc/starknet_specVersion/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_specVersion(
     node: models.NodeName,
 ) -> models.ResponseModelJSON[str]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_specVersion(node, url)
 
@@ -620,12 +646,12 @@ async def starknet_specVersion(
 @app.get(
     "/info/rpc/starknet_syncing/{node}",
     responses={**ERROR_CODES},
-    tags=[TAG_READ],
+    tags=[Tags.READ],
 )
 async def starknet_syncing(
     node: models.NodeName,
 ) -> models.ResponseModelJSON[bool | SyncStatus]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_syncing(node, url)
 
@@ -638,7 +664,7 @@ async def starknet_syncing(
 @app.post(
     "/info/rpc/starknet_simulateTransactions/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_TRACE],
+    tags=[Tags.TRACE],
 )
 async def starknet_simulateTransactions(
     node: models.NodeName,
@@ -647,7 +673,7 @@ async def starknet_simulateTransactions(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[list[SimulatedTransaction]]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_simulateTransactions(
         node, url, body, block_hash, block_number, block_tag
@@ -657,7 +683,7 @@ async def starknet_simulateTransactions(
 @app.post(
     "/info/rpc/starknet_traceBlockTransactions/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_TRACE],
+    tags=[Tags.TRACE],
 )
 async def starknet_traceBlockTransactions(
     node: models.NodeName,
@@ -665,7 +691,7 @@ async def starknet_traceBlockTransactions(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[list[BlockTransactionTrace]]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_traceBlockTransactions(
         node, url, block_hash, block_number, block_tag
@@ -675,13 +701,13 @@ async def starknet_traceBlockTransactions(
 @app.post(
     "/info/rpc/starknet_traceTransaction/{node}/",
     responses={**ERROR_CODES},
-    tags=[TAG_TRACE],
+    tags=[Tags.TRACE],
 )
 async def starknet_traceTransaction(
     node: models.NodeName,
     tx_hash: models.query.TxHash,
 ) -> models.ResponseModelJSON[Any]:
-    container = stats.container_get(node)
+    container = system.container_get(node)
     url = rpc.rpc_url(node, container)
     return await rpc.rpc_starknet_traceTransaction(node, url, tx_hash)
 
@@ -691,7 +717,7 @@ async def starknet_traceTransaction(
 # =========================================================================== #
 
 
-@app.get("/info/docker/running", responses={**ERROR_CODES}, tags=[TAG_DEBUG])
+@app.get("/info/docker/running", responses={**ERROR_CODES}, tags=[Tags.DEBUG])
 async def docker_get_running() -> list[str]:
     """List all running container instances"""
     client = docker.client.from_env()
@@ -699,10 +725,12 @@ async def docker_get_running() -> list[str]:
 
 
 @app.get(
-    "/info/docker/ports/{node}", responses={**ERROR_CODES}, tags=[TAG_DEBUG]
+    "/info/docker/ports/{node}",
+    responses={**ERROR_CODES},
+    tags=[Tags.DEBUG],
 )
 async def docker_get_ports(node: models.NodeName):
     """List all the ports exposed by a node's container"""
 
-    container = stats.container_get(node)
+    container = system.container_get(node)
     return container.ports

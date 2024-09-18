@@ -14,10 +14,10 @@ def container_get(
 
 
 # As explained in https://github.com/moby/moby/issues/26711
-def stats_cpu_normalized(
+async def system_cpu_normalized(
     node: models.NodeName, container: Container
-) -> models.ResponseModelStats[float]:
-    error.container_check_running(node, container)
+) -> models.ResponseModelSystem[float]:
+    error.ensure_container_is_running(node, container)
 
     time_start = datetime.datetime.now()
     stats = container.stats(stream=False)
@@ -38,15 +38,15 @@ def stats_cpu_normalized(
         else 0.0
     )
 
-    return models.ResponseModelStats(
+    return models.ResponseModelSystem(
         node=node, when=time_start, value=cpu_usage
     )
 
 
-def stats_cpu_system(
+async def system_cpu_system(
     node: models.NodeName, container: Container
-) -> models.ResponseModelStats[float]:
-    error.container_check_running(node, container)
+) -> models.ResponseModelSystem[float]:
+    error.ensure_container_is_running(node, container)
 
     time_start = datetime.datetime.now()
     stats = container.stats(stream=False)
@@ -66,29 +66,29 @@ def stats_cpu_system(
         else 0.0
     )
 
-    return models.ResponseModelStats(
+    return models.ResponseModelSystem(
         node=node, when=time_start, value=cpu_usage
     )
 
 
-def stats_memory(
+async def system_memory(
     node: models.NodeName, container: Container
-) -> models.ResponseModelStats[int]:
-    error.container_check_running(node, container)
+) -> models.ResponseModelSystem[int]:
+    error.ensure_container_is_running(node, container)
 
     time_start = datetime.datetime.now()
     stats = container.stats(stream=False)
 
     memory_usage = stats["memory_stats"]["usage"]
-    return models.ResponseModelStats(
+    return models.ResponseModelSystem(
         node=node, when=time_start, value=memory_usage
     )
 
 
-def stats_storage(
+async def system_storage(
     node: models.NodeName, container: Container
-) -> models.ResponseModelStats[int]:
-    error.container_check_running(node, container)
+) -> models.ResponseModelSystem[int]:
+    error.ensure_container_is_running(node, container)
 
     time_start = datetime.datetime.now()
     result = container.exec_run(["du", "-sb", "/data"])
@@ -97,6 +97,6 @@ def stats_storage(
     test = stdin.removesuffix("\t/data\n")
     storage_usage = int(test)
 
-    return models.ResponseModelStats(
+    return models.ResponseModelSystem(
         node=node, when=time_start, value=storage_usage
     )

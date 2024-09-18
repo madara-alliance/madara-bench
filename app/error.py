@@ -92,27 +92,28 @@ class ErrorNodeSilent(fastapi.HTTPException):
 class ErrorStarknetVersion(fastapi.HTTPException):
     def __init__(
         self,
-        method: str,
+        method: models.RpcCall,
         starknet_version: str,
         starknet_version_min: StarknetVersion,
     ) -> None:
         super().__init__(
             status_code=fastapi.status.HTTP_425_TOO_EARLY,
             detail=(
-                f"Failed to call {method}, requires a minimum block version "
-                f"of {starknet_version_min.value}, got {starknet_version}"
+                f"Failed to call {method.value}, requires a minimum block "
+                f"version of {starknet_version_min.value}, got "
+                f"{starknet_version}"
             ),
         )
 
 
 class ErrorRpcCall(fastapi.HTTPException):
     def __init__(
-        self, node: models.NodeName, method: str, e: ClientError
+        self, node: models.NodeName, method: models.RpcCall, e: ClientError
     ) -> None:
         super().__init__(
             status_code=fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=(
-                f"{node.name.capitalize()} failed to call {method}, generated "
+                f"{node.name.capitalize()} failed to call {method.value}, generated "
                 f"error: {e}"
             ),
         )
@@ -124,7 +125,7 @@ def ensure_container_is_running(node: models.NodeName, container: Container):
 
 
 def ensure_meet_version_requirements(
-    method: str, v: str, v_min: StarknetVersion
+    method: models.RpcCall, v: str, v_min: StarknetVersion
 ):
     if v < v_min:
         raise ErrorStarknetVersion(method, v, v_min)

@@ -1,5 +1,5 @@
-import asyncio
 import random
+import typing
 from typing import Any, AsyncGenerator, cast
 
 from starknet_py.net.client_models import (
@@ -12,6 +12,7 @@ from starknet_py.net.client_models import (
     InvokeTransactionV1,
     InvokeTransactionV3,
     SierraContractClass,
+    TransactionExecutionStatus,
 )
 from starknet_py.net.full_node_client import FullNodeClient
 from starknet_py.net.models.transaction import (
@@ -43,15 +44,13 @@ async def latest_common_block_number(urls: dict[models.NodeName, str]) -> int:
 
 async def gen_starknet_getBlockWithTxs(
     urls: dict[models.NodeName, str],
-    interval: float,
 ) -> InputGenerator:
     while True:
         yield {"block_number": await latest_common_block_number(urls)}
-        await asyncio.sleep(interval)
 
 
 async def gen_starknet_getStorageAt(
-    urls: dict[models.NodeName, str], interval: float
+    urls: dict[models.NodeName, str],
 ) -> InputGenerator:
     """Generates a ramdom contract storage key
 
@@ -82,11 +81,10 @@ async def gen_starknet_getStorageAt(
             "key": storage_entry.key,
             "block_number": block_number,
         }
-        await asyncio.sleep(interval)
 
 
 async def gen_starknet_estimateFee(
-    urls: dict[models.NodeName, str], interval: float
+    urls: dict[models.NodeName, str],
 ) -> InputGenerator:
     client = FullNodeClient(node_url=next(iter(urls.values())))
 
@@ -96,15 +94,31 @@ async def gen_starknet_estimateFee(
             max(block_number - GENERATE_RANGE, 0), block_number
         )
         block = await client.get_block(block_number=block_number)
-        transactions = block.transactions
+        txs = block.transactions
 
-        while len(transactions) == 0 or transactions[0].version == 0:
+        if len(txs) > 0:
+            tx_status = await client.get_transaction_status(
+                typing.cast(int, txs[0].hash)
+            )
+            tx_status = tx_status.execution_status
+        else:
+            tx_status = TransactionExecutionStatus.SUCCEEDED
+
+        while (
+            len(txs) == 0
+            or txs[0].version == 0
+            or tx_status == TransactionExecutionStatus.REVERTED
+        ):
             # FIX: this could fail if called too early in the sync
             block_number -= 1
             block = await client.get_block(block_number=block_number)
-            transactions = block.transactions
+            txs = block.transactions
+            tx_status = await client.get_transaction_status(
+                typing.cast(int, txs[0].hash)
+            )
+            tx_status = tx_status.execution_status
 
-        tx = transactions[0]
+        tx = txs[0]
         if isinstance(tx, InvokeTransactionV1):
             tx = InvokeV1(
                 version=tx.version,
@@ -178,11 +192,10 @@ async def gen_starknet_estimateFee(
                 constructor_calldata=tx.constructor_calldata,
             )
         yield {"tx": tx, "block_number": block_number - 1}
-        await asyncio.sleep(interval)
 
 
 async def gen_starknet_traceBlockTransactions(
-    urls: dict[models.NodeName, str], interval: float
+    urls: dict[models.NodeName, str],
 ) -> InputGenerator:
     while True:
         block_number = await latest_common_block_number(urls)
@@ -190,11 +203,10 @@ async def gen_starknet_traceBlockTransactions(
             max(block_number - GENERATE_RANGE, 0), block_number
         )
         yield {"block_number": block_number}
-        await asyncio.sleep(interval)
 
 
 async def gen_starknet_getBlockWithReceipts(
-    urls: dict[models.NodeName, str], interval: float
+    urls: dict[models.NodeName, str],
 ) -> InputGenerator:
     while True:
         block_number = await latest_common_block_number(urls)
@@ -202,4 +214,3 @@ async def gen_starknet_getBlockWithReceipts(
             max(block_number - GENERATE_RANGE, 0), block_number
         )
         yield {"block_number": block_number}
-        await asyncio.sleep(interval)
