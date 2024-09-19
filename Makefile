@@ -7,7 +7,90 @@ IMGS     := $(addsuffix /image.tar.gz,$(NODES))
 VOLUMES  := $(addsuffix _runner_db,$(NODES))
 SECRETS  := secrets/rpc_api.secret     \
             secrets/rpc_api_ws.secret  \
-			secrets/gateway_key.secret
+            secrets/gateway_key.secret
+
+DEPS     := poetry install
+RUNNER   := poetry run fastapi run app
+
+define HELP
+Starknet Node Benchmark Runner
+
+Starts mulitple starknet RPC nodes in individual, isolated and resource-
+constrained containers for benchmarking. An endpoint will be exposed at
+0.0.0.0:8000/docs where you can visually query RPC methods and run benchmarks
+on each node. You can also query this endpoint more traditionally via JSON RPC
+in cases where automation is necessary.
+
+Usage:
+  make <target>
+
+Targets:
+
+  [ RUNNING NODES ]
+
+  Runs nodes, automatically building the required images if they have not 
+  already been generated (this will take some time). Note that it is also 
+  required for you to have added the necessary secrets to `./secrets/`, or the
+  nodes will fail to start.
+
+  - start-madara       Start the Madara node
+  - start-juno         Start the Juno node
+  - start-pathfinder   Start the Pathfinder node
+  - start              Start all nodes
+
+  [ STOPPING NODES ]
+
+  Note that this will only pause container execution and not delete them, any 
+  volume or image.
+
+  - stop-madara        Stop the Madara node
+  - stop-juno          Stop the Juno node
+  - stop-pathfinder    Stop the Pathfinder node
+  - stop               Stop all nodes
+
+  [ RESTARTING NODES ]
+
+  Restarts nodes, possibly cleaning build artefacts, containers, images and
+  volumes in the process. Note that it is also required for you to have added
+  the necessary secrets to `./secrets/`, or the nodes will fail to restart.
+
+  - restart-madara     Restart the Madara node
+  - restart-juno       Restart the Juno node
+  - restart-pathfinder Restart the Pathfinder node
+  - restart            Restart all nodes
+  - frestart           Perform full clean and restart all nodes
+
+  [ LOGGING NODES ]
+
+  This will show logging outputs for a node's container. Defaults to following
+  the output, <Ctrl-C> to quit.
+
+  - logs-madara        View logs for the Madara node
+  - logs-juno          View logs for the Juno node
+  - logs-pathfinder    View logs for the Pathfinder node
+
+  [ BUILDING DEPENDENCIES ]
+
+  Images are built using local dockerfiles running a version of each node 
+  pinned to a specif release or commit. Note that to avoid continuousy 
+  rebuilding images those are export to a `tar.gz` as build artefacts.
+
+  - images             Build Docker images for all nodes
+
+  [ CLEANING DEPENDECIES ]
+
+  Will remove running containers, images and even volumes. Use the latter with
+  care as reseting node volumes will force a resync from genesys.
+
+  - clean              Stop containers and prune images
+  - fclean             Perform clean and remove local images and volumes
+
+  [ OTHER COMMANDS ]
+
+  - help             Show this help message
+
+endef
+export HELP
 
 # dim white italic
 TERTIARY := \033[2;3;37m
@@ -28,26 +111,38 @@ all: help
 
 .PHONY: help
 help:
-	@echo "TODO(help)"
+	@echo "$$HELP"
 
 .PHONY: start-madara
 start-madara: images $(SECRETS)
 	@echo -e "$(TERTIARY)running$(RESET) $(PASS)madara$(RESET)"
 	@docker-compose -f madara/compose.yaml up -d
+	@$(DEPS)
+	@$(RUNNER)
 
 .PHONY: start-juno
 start-juno: images $(SECRETS)
 	@echo -e "$(TERTIARY)running$(RESET) $(PASS)juno$(RESET)"
 	@docker-compose -f juno/compose.yaml up -d
+	@$(DEPS)
+	@$(RUNNER)
 
 .PHONY: start-pathfinder
 start-pathfinder: images $(SECRETS)
 	@echo -e "$(TERTIARY)running$(RESET) $(PASS)pathfinder$(RESET)"
 	@docker-compose -f pathfinder/compose.yaml up -d
+	@$(DEPS)
+	@$(RUNNER)
 
 .PHONY: start
-start: start-madara start-juno start-pathfinder
+start: images $(SECRETS)
+	@for node in $(NODES); do \
+		echo -e "$(TERTIARY)running$(RESET) $(PASS)$$node$(RESET)"; \
+		docker-compose -f $$node/compose.yaml up -d; \
+	done
 	@echo -e "$(PASS)all services set up$(RESET)"
+	@$(DEPS)
+	@$(RUNNER)
 
 .PHONY: stop-madara
 stop-madara:
@@ -123,11 +218,6 @@ restart: clean
 .PHONY: frestart
 frestart: fclean
 	@make --silent start
-
-.PHONY: debug
-debug:
-	@echo $(NODES)
-	@echo $(IMGS)
 
 .SECONDEXPANSION:
 %image.tar.gz: node = $(@D)
