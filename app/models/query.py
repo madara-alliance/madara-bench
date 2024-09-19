@@ -78,6 +78,21 @@ TestInterval = Annotated[
     fastapi.Query(
         ge=0,
         le=1000,
-        description=("Interval between subsequent tests, in milliseconds"),
+        description="Interval between subsequent tests, in milliseconds",
     ),
 ]
+
+# DiffEnable = Annotated[
+#     bool,
+#     fastapi.Query(
+#         description=(
+#             "If `true` returns a Myers diff between each node's outputs as "
+#             "part of the result"
+#         )
+#     ),
+# ]
+#
+# DiffSource = Annotated[
+#     models.models.NodeName,
+#     fastapi.Query(description="The node used as the source of the diff"),
+# ]

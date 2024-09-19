@@ -1,3 +1,4 @@
+import json
 from enum import Enum
 from typing import Any
 
@@ -124,11 +125,17 @@ async def benchmark_system(
     )
 
 
-@app.get("/bench/rpc/", responses={**ERROR_CODES}, tags=[Tags.BENCH])
+@app.get(
+    "/bench/rpc/",
+    responses={**ERROR_CODES},
+    tags=[Tags.BENCH],
+)
 async def benchmark_rpc(
     rpc_call: models.RpcCallBench,
     samples: models.query.TestSamples = 10,
     interval: models.query.TestInterval = 100,
+    # diff: models.query.DiffEnable = False,
+    # diff_source: models.query.DiffSource = models.models.NodeName.MADARA,
 ) -> models.ResponseModelBenchRpc:
     containers = [
         (node, system.container_get(node)) for node in models.NodeName
@@ -137,7 +144,12 @@ async def benchmark_rpc(
         node: rpc.rpc_url(node, container) for (node, container) in containers
     }
 
-    return await benchmarks.benchmark_rpc(urls, rpc_call, samples, interval)
+    return await benchmarks.benchmark_rpc(
+        urls,
+        rpc_call,
+        samples,
+        interval,
+    )
 
 
 # =========================================================================== #

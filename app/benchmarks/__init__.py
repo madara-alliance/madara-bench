@@ -44,7 +44,7 @@ class BenchmarkToolsRpc:
     input_generator: Callable[
         [dict[models.NodeName, str]], generators.InputGenerator
     ]
-    runner: Callable[..., Coroutine[Any, Any, Any]]
+    runner: Callable[..., Coroutine[Any, Any, models.ResponseModelJSON]]
 
 
 # Mapping from rpc method name to its associated runner and input generator
@@ -97,6 +97,8 @@ async def benchmark_rpc(
     rpc_call: models.RpcCallBench,
     samples: models.query.TestSamples,
     interval: models.query.TestInterval,
+    # diff: models.query.DiffEnable,
+    # diff_source: models.query.DiffSource,
 ) -> models.ResponseModelBenchRpc:
     """Runs the actual rpc benchmark
 
@@ -149,6 +151,39 @@ async def benchmark_rpc(
     when = [min([resp.when for resp in resps]) for resps in results]
     elapsed = [[resp.elapsed for resp in resps] for resps in results]
     elapsed_avg = [sum(all) // len(all) for all in elapsed]
+
+    # if diff == True:
+    #     source = next(
+    #         [
+    #             json.dumps(
+    #                 vars(resp.output), sort_keys=True, indent=2, default=str
+    #             ).splitlines()
+    #             for resp in item
+    #         ]
+    #         for item in results
+    #         if item[0].node == diff_source
+    #     )
+    #     targets = {
+    #         item[0].node: [
+    #             json.dumps(
+    #                 vars(resp.output), sort_keys=True, indent=2, default=str
+    #             ).splitlines()
+    #             for resp in item
+    #         ]
+    #         for item in results
+    #         if item[0].node != diff_source
+    #     }
+    #     diffs = {
+    #         node: [
+    #             list(
+    #                 difflib.unified_diff(resp_source, resp_target, lineterm="")
+    #             )
+    #             for resp_source, resp_target in zip(source, target)
+    #         ]
+    #         for node, target in targets.items()
+    #     }
+    # else:
+    #     diffs: dict[models.models.NodeName, list[list[str]]] = {}
 
     nodes = [
         models.NodeResponseBenchRpc(
