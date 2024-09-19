@@ -19,16 +19,17 @@
 
 ## How it works
 
-**MADARA bench** runs various Starknet RPC nodes in isolated, resource-
-constrained containers for testing. These nodes are automatically set up and 
-have their RPC endpoints opened up for you to test using an online api using 
-[FatsAPI](https://github.com/fastapi/fastapi).
+**MADARA bench** runs various Starknet RPC nodes in isolated, resource-constrained
+containers for testing. These nodes are automatically set up and 
+have their RPC endpoints opened up for you to test using an online api 
+(served with [FastAPI](https://github.com/fastapi/fastapi)).
 
 ## Dependencies
 
 > [!TIP]
 > If you are using [Nixos](https://nixos.org/) or the [nix](https://nixos.org/)
-> package manager, you can skip to [running](#nix).
+> package manager, you can skip to [running](#nix) (you will still need to
+> [specify secrets](#step-4-specifying-secrets)).
 
 **MADARA bench** currently only supports running on _linux_ and requires 
 [docker](https://docs.docker.com/engine/install/) and 
