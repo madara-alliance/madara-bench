@@ -22,7 +22,6 @@ from starknet_py.net.client_models import (
     StarknetBlockWithReceipts,
     StarknetBlockWithTxHashes,
     SyncStatus,
-    Transaction,
     TransactionReceipt,
     TransactionStatusResponse,
 )
@@ -114,14 +113,14 @@ async def exception_handler_requests_json_decode_error(
 
 @app.get("/bench/system/", responses={**ERROR_CODES}, tags=[Tags.BENCH])
 async def benchmark_system(
-    metrics: models.SystemMetric,
+    metric: models.SystemMetric,
     samples: models.query.TestSamples = 10,
     interval: models.query.TestInterval = 100,
 ) -> list[models.ResponseModelSystem]:
     containers = {node: system.container_get(node) for node in models.NodeName}
 
     return await benchmarks.benchmark_system(
-        containers, metrics, samples, interval
+        containers, metric, samples, interval
     )
 
 

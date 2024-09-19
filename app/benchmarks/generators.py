@@ -42,6 +42,22 @@ async def latest_common_block_number(urls: dict[models.NodeName, str]) -> int:
     return min(block_numbers)
 
 
+async def gen_empty(_: dict[models.NodeName, str]) -> InputGenerator:
+    while True:
+        yield {}
+
+
+async def gen_starknet_getBlockWithReceipts(
+    urls: dict[models.NodeName, str],
+) -> InputGenerator:
+    while True:
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - GENERATE_RANGE, 0), block_number
+        )
+        yield {"block_number": block_number}
+
+
 async def gen_starknet_getBlockWithTxs(
     urls: dict[models.NodeName, str],
 ) -> InputGenerator:
@@ -195,17 +211,6 @@ async def gen_starknet_estimateFee(
 
 
 async def gen_starknet_traceBlockTransactions(
-    urls: dict[models.NodeName, str],
-) -> InputGenerator:
-    while True:
-        block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
-        yield {"block_number": block_number}
-
-
-async def gen_starknet_getBlockWithReceipts(
     urls: dict[models.NodeName, str],
 ) -> InputGenerator:
     while True:

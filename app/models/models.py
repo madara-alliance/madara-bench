@@ -114,9 +114,23 @@ class ResponseModelSystem(pydantic.BaseModel, Generic[T]):
     """
 
     node: NodeName
+    metric: SystemMetric
     when: Annotated[
         datetime.datetime,
         pydantic.Field(description="Measurement issuing time"),
+    ]
+    block_number: Annotated[
+        int,
+        pydantic.Field(description="Block number at the start of the tests"),
+    ]
+    syncing: Annotated[
+        bool,
+        pydantic.Field(
+            description=(
+                "Node synchronization status, `false` if the node is no "
+                "longer synchronizing"
+            )
+        ),
     ]
     value: Annotated[T, pydantic.Field(description="System measurement result")]
 
@@ -137,6 +151,19 @@ class NodeResponseBenchRpc(pydantic.BaseModel):
     when: Annotated[
         datetime.datetime,
         pydantic.Field(description="Test start time"),
+    ]
+    block_number: Annotated[
+        int,
+        pydantic.Field(description="Block number at the start of the tests"),
+    ]
+    syncing: Annotated[
+        bool,
+        pydantic.Field(
+            description=(
+                "Node synchronization status, `false` if the node is no "
+                "longer synchronizing"
+            )
+        ),
     ]
     elapsed_avg: Annotated[
         int,

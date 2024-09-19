@@ -2,8 +2,9 @@ import datetime
 
 import docker
 from docker.models.containers import Container
+from starknet_py.net.client_models import SyncStatus
 
-from app import error, models
+from app import error, models, rpc
 
 
 def container_get(
@@ -18,6 +19,8 @@ async def system_cpu_normalized(
     node: models.NodeName, container: Container
 ) -> models.ResponseModelSystem[float]:
     error.ensure_container_is_running(node, container)
+
+    url = rpc.rpc_url(node, container)
 
     time_start = datetime.datetime.now()
     stats = container.stats(stream=False)
@@ -38,8 +41,18 @@ async def system_cpu_normalized(
         else 0.0
     )
 
+    block_number = await rpc.rpc_starknet_blockNumber(node, url)
+    block_number = block_number.output
+    sync_status = await rpc.rpc_starknet_syncing(node, url)
+    sync_status = isinstance(sync_status.output, SyncStatus)
+
     return models.ResponseModelSystem(
-        node=node, when=time_start, value=cpu_usage
+        node=node,
+        metric=models.models.SystemMetric.CPU,
+        when=time_start,
+        block_number=block_number,
+        syncing=sync_status,
+        value=cpu_usage,
     )
 
 
@@ -47,6 +60,8 @@ async def system_cpu_system(
     node: models.NodeName, container: Container
 ) -> models.ResponseModelSystem[float]:
     error.ensure_container_is_running(node, container)
+
+    url = rpc.rpc_url(node, container)
 
     time_start = datetime.datetime.now()
     stats = container.stats(stream=False)
@@ -66,8 +81,18 @@ async def system_cpu_system(
         else 0.0
     )
 
+    block_number = await rpc.rpc_starknet_blockNumber(node, url)
+    block_number = block_number.output
+    sync_status = await rpc.rpc_starknet_syncing(node, url)
+    sync_status = isinstance(sync_status.output, SyncStatus)
+
     return models.ResponseModelSystem(
-        node=node, when=time_start, value=cpu_usage
+        node=node,
+        metric=models.models.SystemMetric.CPU_SYSTEM,
+        when=time_start,
+        block_number=block_number,
+        syncing=sync_status,
+        value=cpu_usage,
     )
 
 
@@ -76,12 +101,24 @@ async def system_memory(
 ) -> models.ResponseModelSystem[int]:
     error.ensure_container_is_running(node, container)
 
+    url = rpc.rpc_url(node, container)
+
     time_start = datetime.datetime.now()
     stats = container.stats(stream=False)
 
+    block_number = await rpc.rpc_starknet_blockNumber(node, url)
+    block_number = block_number.output
+    sync_status = await rpc.rpc_starknet_syncing(node, url)
+    sync_status = isinstance(sync_status.output, SyncStatus)
+
     memory_usage = stats["memory_stats"]["usage"]
     return models.ResponseModelSystem(
-        node=node, when=time_start, value=memory_usage
+        node=node,
+        metric=models.models.SystemMetric.MEMORY,
+        when=time_start,
+        block_number=block_number,
+        syncing=sync_status,
+        value=memory_usage,
     )
 
 
@@ -90,6 +127,8 @@ async def system_storage(
 ) -> models.ResponseModelSystem[int]:
     error.ensure_container_is_running(node, container)
 
+    url = rpc.rpc_url(node, container)
+
     time_start = datetime.datetime.now()
     result = container.exec_run(["du", "-sb", "/data"])
 
@@ -97,6 +136,16 @@ async def system_storage(
     test = stdin.removesuffix("\t/data\n")
     storage_usage = int(test)
 
+    block_number = await rpc.rpc_starknet_blockNumber(node, url)
+    block_number = block_number.output
+    sync_status = await rpc.rpc_starknet_syncing(node, url)
+    sync_status = isinstance(sync_status.output, SyncStatus)
+
     return models.ResponseModelSystem(
-        node=node, when=time_start, value=storage_usage
+        node=node,
+        metric=models.models.SystemMetric.STORAGE,
+        when=time_start,
+        block_number=block_number,
+        syncing=sync_status,
+        value=storage_usage,
     )

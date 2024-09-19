@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, TypeVar
 
 from docker.models.containers import Container as DockerContainer
+from starknet_py.net.client_models import SyncStatus
 
 from app import models, rpc, system
 
@@ -48,6 +49,10 @@ class BenchmarkToolsRpc:
 
 # Mapping from rpc method name to its associated runner and input generator
 MAPPINGS_RPC: dict[models.RpcCallBench, BenchmarkToolsRpc] = {
+    models.RpcCallBench.STARKNET_GET_BLOCK_WITH_RECEIPTS: BenchmarkToolsRpc(
+        generators.gen_starknet_getBlockWithReceipts,
+        rpc.rpc_starknet_getBlockWithReceipts,
+    ),
     models.RpcCallBench.STARKNET_GET_BLOCK_WITH_TXS: BenchmarkToolsRpc(
         generators.gen_starknet_getBlockWithTxs,
         rpc.rpc_starknet_getBlockWithTxs,
@@ -61,10 +66,6 @@ MAPPINGS_RPC: dict[models.RpcCallBench, BenchmarkToolsRpc] = {
     models.RpcCallBench.STARKNET_TRACE_BLOCK_TRANSACTIONS: BenchmarkToolsRpc(
         generators.gen_starknet_traceBlockTransactions,
         rpc.rpc_starknet_traceBlockTransactions,
-    ),
-    models.RpcCallBench.STARKNET_GET_BLOCK_WITH_RECEIPTS: BenchmarkToolsRpc(
-        generators.gen_starknet_getBlockWithReceipts,
-        rpc.rpc_starknet_getBlockWithReceipts,
     ),
 }
 
@@ -116,15 +117,34 @@ async def benchmark_rpc(
     # python loops are slow so we use list comprehension instead
     inputs = [await anext(generator) for _ in range(samples)]
 
-    futures_layered = [
+    # Aggregates futures for them to be launched together
+    futures_bench = [
         [
             with_sleep(tool.runner(node, url, **input), i * sleep)
             for i, input in enumerate(inputs)
         ]
         for node, url in urls.items()
     ]
-    results = [await asyncio.gather(*futures) for futures in futures_layered]
+    futures_block_no = [
+        rpc.rpc_starknet_blockNumber(node, url) for node, url in urls.items()
+    ]
+    futures_syncing = [
+        rpc.rpc_starknet_syncing(node, url) for node, url in urls.items()
+    ]
 
+    # Block number and sync status is retrieved BEFORE rpc tests results, which
+    # WILL lead to imprecisions, however we deem those to be negligeable (in
+    # the order of magnitude of a few blocks at most)
+    block_nos = [
+        resp.output for resp in await asyncio.gather(*futures_block_no)
+    ]
+    sync_status = [
+        isinstance(resp.output, SyncStatus)
+        for resp in await asyncio.gather(*futures_syncing)
+    ]
+    results = [await asyncio.gather(*futures) for futures in futures_bench]
+
+    # Accumulates each future's results
     node = [resps[0].node for resps in results]
     when = [min([resp.when for resp in resps]) for resps in results]
     elapsed = [[resp.elapsed for resp in resps] for resps in results]
@@ -135,9 +155,13 @@ async def benchmark_rpc(
             node=node,
             method=rpc_call,
             when=when,
+            block_number=block_number,
+            syncing=syncing,
             elapsed_avg=elapsed_avg,
         )
-        for node, when, elapsed_avg in zip(node, when, elapsed_avg)
+        for node, when, block_number, syncing, elapsed_avg in zip(
+            node, when, block_nos, sync_status, elapsed_avg
+        )
     ]
 
     return models.ResponseModelBenchRpc(nodes=nodes, inputs=inputs)
@@ -145,19 +169,43 @@ async def benchmark_rpc(
 
 async def benchmark_system(
     containers: dict[models.NodeName, DockerContainer],
-    metrics: models.SystemMetric,
+    metric: models.SystemMetric,
     samples: models.query.TestSamples,
     interval: models.query.TestInterval,
 ) -> list[models.ResponseModelSystem]:
-    f = MAPPINGS_SYSTEM[metrics]
+    f = MAPPINGS_SYSTEM[metric]
     sleep = interval * TO_MILLIS
 
-    futures_layered = [
+    urls = [
+        (node, rpc.rpc_url(node, container))
+        for node, container in containers.items()
+    ]
+
+    # Aggregates futures for them to be launched together
+    futures_bench = [
         [with_sleep(f(node, container), i * sleep) for i in range(samples)]
         for node, container in containers.items()
     ]
-    results = [await asyncio.gather(*futures) for futures in futures_layered]
+    futures_block_no = [
+        rpc.rpc_starknet_blockNumber(node, url) for node, url in urls
+    ]
+    futures_syncing = [
+        rpc.rpc_starknet_syncing(node, url) for node, url in urls
+    ]
 
+    # Block number and sync status is retrieved BEFORE rpc tests results, which
+    # WILL lead to imprecisions, however we deem those to be negligeable (in
+    # the order of magnitude of a few blocks at most)
+    block_nos = [
+        resp.output for resp in await asyncio.gather(*futures_block_no)
+    ]
+    sync_status = [
+        isinstance(resp.output, SyncStatus)
+        for resp in await asyncio.gather(*futures_syncing)
+    ]
+    results = [await asyncio.gather(*futures) for futures in futures_bench]
+
+    # Accumulates each future's results
     node = [resp[0].node for resp in results]
     when = [min([resp.when for resp in resps]) for resps in results]
     value = [[resp.value for resp in resps] for resps in results]
@@ -168,6 +216,15 @@ async def benchmark_system(
         value_avg = [sum(all) / len(all) for all in value]
 
     return [
-        models.ResponseModelSystem(node=node, when=when, value=value)
-        for node, when, value in zip(node, when, value_avg)
+        models.ResponseModelSystem(
+            node=node,
+            metric=metric,
+            when=when,
+            block_number=block_number,
+            syncing=syncing,
+            value=value,
+        )
+        for node, when, block_number, syncing, value in zip(
+            node, when, block_nos, sync_status, value_avg
+        )
     ]
