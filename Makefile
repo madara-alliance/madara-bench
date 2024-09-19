@@ -96,7 +96,7 @@ export HELP
 TERTIARY := \033[2;3;37m
 
 # bold cyan
-PASS     := \033[1;36m
+INFO     := \033[1;36m
 
 # bold green
 PASS     := \033[1;32m

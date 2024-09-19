@@ -28,7 +28,7 @@ have their RPC endpoints opened up for you to test using an online api using
 
 > [!TIP]
 > If you are using [Nixos](https://nixos.org/) or the [nix](https://nixos.org/)
-> package manager, you can skip this section right to [running](#nix).
+> package manager, you can skip to [running](#nix).
 
 **MADARA bench** currently only supports running on _linux_ and requires 
 [docker](https://docs.docker.com/engine/install/) and 
@@ -93,8 +93,9 @@ make help
 
 ## Nix
 
-If you are using [Nixos](https://nixos.org/) or the [nix](https://nixos.org/), 
-you do not need to install any dependencies and can instead just run:
+If you are using [Nixos](https://nixos.org/) or the [nix](https://nixos.org/) 
+package manager, you do not need to install any dependencies and can instead 
+just run:
 
 ```bash
 nix develop --extra-experimental-features "nix-command flakes" .#start
@@ -114,7 +115,7 @@ sections:
 - `bench`: run system and RPC benchmarks
 - `system`: display system metrics (CPU, memory and storage usage)
 - `read`: query individual RPC methods on each node
-- `trace`: run tracing RPC call on each node
+- `trace`: run tracing RPC calls on each node
 - `debug`: display useful extra information
 
 RPC benchmarks are _procedural_, that is to say inputs are generated 
