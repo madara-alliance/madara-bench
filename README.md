@@ -1,4 +1,12 @@
+<!-- markdownlint-disable -->
+<div align="center">
+  <img src="https://github.com/madara-alliance/madara-bench/blob/main/res/banner.png" style="width: 100%; height: auto; object-fit: cover; object-position: center;">
+</div>
+<div align="center">
+<br />
+<!-- markdownlint-restore -->
 
+</div>
 
 > A simple [Starknet](https://www.starknet.io/) **RPC benchmarking tool**
 
@@ -20,14 +28,14 @@ have their RPC endpoints opened up for you to test using an online api using
 
 > [!TIP]
 > If you are using [Nixos](https://nixos.org/) or the [nix](https://nixos.org/)
-> package manager, you can skip this section right to [running](#running).
+> package manager, you can skip this section right to [running](#nix).
 
 **MADARA bench** currently only supports running on _linux_ and requires 
 [docker](https://docs.docker.com/engine/install/) and 
 [docker-compose](https://docs.docker.com/compose/install/) to be installed on
 the host system.
 
-Step 1: _installing build-essential_
+#### Step 1: _installing build-essential_
 
 This is needed by certain python packages
 
@@ -36,7 +44,7 @@ sudo apt update
 sudo apt install build-essential
 ```
 
-Step 2: _installing python 3.12_
+#### Step 2: _installing python 3.12_
 
 ```bash
 sudo add-apt-repository ppa:deadsnakes/ppa
@@ -44,7 +52,7 @@ sudo apt update
 sudo apt install -y python3.12 python3.12-venv
 ```
 
-Step 3: _installing poetry_ (python package manager)
+#### Step 3: _installing poetry_ (python package manager)
 
 > [_official instructions_](https://python-poetry.org/docs/#installing-with-the-official-installer)
 
@@ -82,6 +90,8 @@ make help
 ```
 
 ---
+
+## Nix
 
 If you are using [Nixos](https://nixos.org/) or the [nix](https://nixos.org/), 
 you do not need to install any dependencies and can instead just run:
