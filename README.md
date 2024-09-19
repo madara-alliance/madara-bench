@@ -60,6 +60,26 @@ sudo apt install -y python3.12 python3.12-venv
 curl -sSL https://install.python-poetry.org | python3 -
 ```
 
+#### Step 4: _specifying secrets_
+
+The following are required for **MADARA bench** to start:
+
+```bash
+echo abc > secrets/gateway_key.secret
+echo https://eth-sepolia.g.alchemy.com/abc > secrets/rpc_api.secret
+echo wss://eth-sepolia.g.alchemy.com/abc > secrets/rpc_api_ws.secret
+```
+
+You can get an RPC api key frm [Alchemy](https://www.alchemy.com/),
+[Infura](https://www.infura.io/) or [BlastAPI](https://blastapi.io/), amongst
+others. `gateway_key` is a special key which has been given out to node 
+development teams in the ecosystem and is used to bypass sequencer rate limits 
+for testing purposes. _It is not available publicly_.
+
+> [!IMPORTANT]
+> By default, **MADARA bench** runs on _starknet testnet_, and you will need
+> your RPC api keys to point to _ethereum sepolia_ for this to work.
+
 ## Running
 
 To start **MADARA bench**, run the following command:
