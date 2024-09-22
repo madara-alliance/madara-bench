@@ -95,8 +95,7 @@ endpoint at [0.0.0.0:8000/docs](http://0.0.0.0:8000/docs).
 
 > [!WARNING]
 > If this is the first time you are running **MADARA bench**, sit back and grab
-> a cup of coffee as building the node images for the first time can take a 
-> while.
+> a cup of coffee as building the node images can take a while.
 
 To stop **MADARA bench**, run:
 
@@ -126,6 +125,41 @@ This will download every dependency into a [development shell](https://nixos.wik
 independent of the rest of your system and start **MADARA bench**. This is the 
 _preferred way_ of running **MADARA bench** and will also handle auto-closing 
 docker containers for you.
+
+---
+
+## As a service
+
+> [!IMPORTANT]
+> The following instructions assume you have set up **MADARA bench** to run
+> under [nix](#nix).
+
+You should make sure the user you are using to run **MADARA bench** as a
+service is part of the `docker` group. This way you can run it as a _user 
+service_ instead of a _root service_.
+
+To run **MADARA bench** as a user service, follow these instructions:
+
+1. Replace `/path/to/madara-bench` in `madara-bench.service` with its actual
+path
+
+2. If it does not exist already, create `$HOME/.config/systemd/user/`:
+```bash
+mkdir -p $HOME/.config/systemd/user
+```
+
+3. Copy over `madara-bench.service` to `$HOME/.config/systemd/user/`:
+```bash
+cp madara-bench.service $HOME/.config/systemd/user
+```
+
+4. Start the service:
+```bash
+systemctl --user daemon-reload
+systemctl --user enable madara-bench.service
+systemctl --user start madara-bench.service
+journalctl --user -u madara-bench -f
+```
 
 ## Benchmarks
 
