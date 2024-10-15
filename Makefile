@@ -147,18 +147,18 @@ start: images $(SECRETS)
 
 .PHONY: stop-madara
 stop-madara:
-	@echo -e "$(TERTIARY)stopping $(WARN)madara$(RESET)"; \
-	@docker-compose -f madara/compose.yaml stop; \
+	@echo -e "$(TERTIARY)stopping $(WARN)madara$(RESET)"
+	@docker-compose -f madara/compose.yaml stop
 
 .PHONY: stop-juno
 stop-juno:
-	@echo -e "$(TERTIARY)stopping $(WARN)juno$(RESET)"; \
-	@docker-compose -f juno/compose.yaml stop; \
+	@echo -e "$(TERTIARY)stopping $(WARN)juno$(RESET)"
+	@docker-compose -f juno/compose.yaml stop
 
 .PHONY: stop-pathfinder
 stop-pathfinder:
-	@echo -e "$(TERTIARY)stopping $(WARN)pathfinder$(RESET)"; \
-	@docker-compose -f pathfinder/compose.yaml stop; \
+	@echo -e "$(TERTIARY)stopping $(WARN)pathfinder$(RESET)"
+	@docker-compose -f pathfinder/compose.yaml stop
 
 .PHONY: stop
 stop: stop-madara stop-juno stop-pathfinder
