@@ -5,8 +5,9 @@ export GATEWAY_KEY=$(cat $GATEWAY_KEY_FILE)
 ./madara                       \
 	--name madara              \
 	--base-path /data/madara   \
-	--network test             \
+	--network sepolia          \
 	--rpc-external             \
 	--rpc-cors all             \
+	--full                     \
 	--l1-endpoint $RPC_API_KEY \
 	--gateway-key $GATEWAY_KEY

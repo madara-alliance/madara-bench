@@ -83,7 +83,8 @@ Targets:
   care as reseting node volumes will force a resync from genesys.
 
   - clean              Stop containers and prune images
-  - fclean             Perform clean and remove local images and volumes
+  - clean-db           Perform clean and remove local volumes
+  - fclean             Perform clean-db and remove local images
 
   [ OTHER COMMANDS ]
 
@@ -146,18 +147,18 @@ start: images $(SECRETS)
 
 .PHONY: stop-madara
 stop-madara:
-	echo -e "$(TERTIARY)stopping $(WARN)madara$(RESET)"; \
-	docker-compose -f madara/compose.yaml stop; \
+	@echo -e "$(TERTIARY)stopping $(WARN)madara$(RESET)"; \
+	@docker-compose -f madara/compose.yaml stop; \
 
 .PHONY: stop-juno
 stop-juno:
-	echo -e "$(TERTIARY)stopping $(WARN)juno$(RESET)"; \
-	docker-compose -f juno/compose.yaml stop; \
+	@echo -e "$(TERTIARY)stopping $(WARN)juno$(RESET)"; \
+	@docker-compose -f juno/compose.yaml stop; \
 
 .PHONY: stop-pathfinder
 stop-pathfinder:
-	echo -e "$(TERTIARY)stopping $(WARN)pathfinder$(RESET)"; \
-	docker-compose -f pathfinder/compose.yaml stop; \
+	@echo -e "$(TERTIARY)stopping $(WARN)pathfinder$(RESET)"; \
+	@docker-compose -f pathfinder/compose.yaml stop; \
 
 .PHONY: stop
 stop: stop-madara stop-juno stop-pathfinder
@@ -189,14 +190,17 @@ clean: stop
 	@docker image prune -f
 	@echo -e "$(WARN)images cleaned$(RESET)"
 
-.PHONY: fclean
-fclean: clean
-	@echo -e "$(TERTIARY)removing local images tar.gz$(RESET)"
-	@rm -rf $(IMGS)
+.PHONY: clean-db
+clean-db: clean
 	@echo -e "$(TERTIARY)removing local database volumes$(RESET)"
 	@for volume in $(VOLUMES); do  \
 		docker volume rm -f $$volume; \
 	done
+
+.PHONY: fclean
+fclean: clean-db
+	@echo -e "$(TERTIARY)removing local images tar.gz$(RESET)"
+	@rm -rf $(IMGS)
 	@echo -e "$(WARN)artefacts cleaned$(RESET)"
 
 .PHONY: restart-madara

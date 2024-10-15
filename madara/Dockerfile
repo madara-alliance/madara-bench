@@ -10,7 +10,7 @@ RUN apt-get -y update            && \
 # https://github.com/madara-alliance/madara/commit/d45dc388bbb62de8e715014d18f2bca93dfa198e
 RUN git clone https://github.com/madara-alliance/madara.git madara && \
     cd madara                                                      && \
-    git checkout d45dc388bbb62de8e715014d18f2bca93dfa198e
+    git checkout c91dfbf784523dc7bd7f020e1da15aed3f87651a
 
 # Installing scarb, new since devnet integration
 # Installation steps are taken from the scarb build script
