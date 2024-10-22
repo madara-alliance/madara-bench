@@ -11,11 +11,12 @@ RUN apt-get -y update &&  \
 	protobuf-compiler \
 	libzstd-dev
 
-# Downloading pathfinder v0.14.2
-# https://github.com/eqlabs/pathfinder/tree/release/v0.14.2
+# Downloading pathfinder v0.14.3
+# https://github.com/eqlabs/pathfinder/tree/release/v0.14.4
 RUN git clone https://github.com/eqlabs/pathfinder.git pathfinder && \
     cd pathfinder                                                 && \
-    git checkout -b release/v0.14.2
+    git fetch --tags                                              && \
+    git checkout tags/v0.14.4
 
 # Set the compilation directory
 WORKDIR /usr/src/pathfinder

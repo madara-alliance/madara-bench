@@ -2,6 +2,8 @@
 export RPC_API_KEY=$(cat $RPC_API_KEY_FILE)
 export GATEWAY_KEY=$(cat $GATEWAY_KEY_FILE)
 
+echo "fuck youuuuuu " $RPC_API_KEY
+
 ./pathfinder                          \
 	--data-directory /data/pathfinder \
 	--storage.state-tries archive     \

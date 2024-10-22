@@ -15,11 +15,12 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Set the working directory
 WORKDIR /usr/src/
 
-# Download juno from last build with passing CI
-# https://github.com/NethermindEth/juno/commit/1862240f8ff8da6f94fb7c2e1a0f062bbe5780ba
+# Download juno v0.12.3
+# https://github.com/NethermindEth/juno/tree/v0.12.3
 RUN git clone https://github.com/NethermindEth/juno.git juno && \
     cd juno                                                  && \
-    git checkout 1862240f8ff8da6f94fb7c2e1a0f062bbe5780ba
+    git fetch --tags                                         && \
+    git checkout tags/v0.12.3
 
 # Set the compilation directory
 WORKDIR /usr/src/juno

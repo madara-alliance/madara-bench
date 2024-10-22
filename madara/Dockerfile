@@ -6,11 +6,11 @@ WORKDIR /usr/src/
 RUN apt-get -y update            && \
     apt-get install -y clang git
 
-# Downloading madara from Sep 12, 2024
-# https://github.com/madara-alliance/madara/commit/d45dc388bbb62de8e715014d18f2bca93dfa198e
+# Downloading madara from Oct 21, 2024
+# https://github.com/madara-alliance/madara/commit/166ec294d91e46d34419d224a94cadcfdfc5926e
 RUN git clone https://github.com/madara-alliance/madara.git madara && \
     cd madara                                                      && \
-    git checkout c91dfbf784523dc7bd7f020e1da15aed3f87651a
+    git checkout 166ec294d91e46d34419d224a94cadcfdfc5926e
 
 # Installing scarb, new since devnet integration
 # Installation steps are taken from the scarb build script
@@ -28,8 +28,8 @@ RUN curl -fLS -o $SCARB_TARGET                                          \
 # Set the compilation directory
 WORKDIR /usr/src/madara
 
-# Build the application in production mode
-RUN cargo build --profile production
+# Build the application in release mode
+RUN cargo build --release
 
 # Stage 2: Create the final runtime image
 FROM debian:bookworm-slim
@@ -45,7 +45,7 @@ RUN apt-get -y update                                  && \
 WORKDIR /usr/local/bin
 
 # Copy the compiled binary from the builder stage
-COPY --from=builder /usr/src/madara/target/production/madara .
+COPY --from=builder /usr/src/madara/target/release/madara .
 
 # Copies the runner. This is responsible for reading secrets and launching
 # madara

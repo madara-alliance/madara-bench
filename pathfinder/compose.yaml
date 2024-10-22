@@ -23,7 +23,7 @@ services:
 
 secrets:
   rpc_api_key:
-    file: ../secrets/rpc_api_ws.secret
+    file: ../secrets/rpc_api.secret
   gateway_key:
     file: ../secrets/gateway_key.secret
 
