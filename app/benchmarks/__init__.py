@@ -49,23 +49,93 @@ class BenchmarkToolsRpc:
 
 # Mapping from rpc method name to its associated runner and input generator
 MAPPINGS_RPC: dict[models.RpcCallBench, BenchmarkToolsRpc] = {
-    models.RpcCallBench.STARKNET_GET_BLOCK_WITH_RECEIPTS: BenchmarkToolsRpc(
-        generators.gen_starknet_getBlockWithReceipts,
-        rpc.rpc_starknet_getBlockWithReceipts,
+    models.RpcCallBench.STARKNET_BLOCK_HASH_AND_NUMBER: BenchmarkToolsRpc(
+        generators.gen_param_empty,
+        rpc.rpc_starknet_blockHashAndNumber,
     ),
-    models.RpcCallBench.STARKNET_GET_BLOCK_WITH_TXS: BenchmarkToolsRpc(
-        generators.gen_starknet_getBlockWithTxs,
-        rpc.rpc_starknet_getBlockWithTxs,
+    models.RpcCallBench.STARKNET_BLOCK_NUMBER: BenchmarkToolsRpc(
+        generators.gen_param_empty,
+        rpc.rpc_starknet_blockNumber,
     ),
-    models.RpcCallBench.STARKNET_GET_STORAGE_AT: BenchmarkToolsRpc(
-        generators.gen_starknet_getStorageAt, rpc.rpc_starknet_getStorageAt
+    models.RpcCallBench.STARKNET_CHAIN_ID: BenchmarkToolsRpc(
+        generators.gen_param_empty,
+        rpc.rpc_starknet_chainId,
     ),
     models.RpcCallBench.STARKNET_ESTIMATE_FEE: BenchmarkToolsRpc(
         generators.gen_starknet_estimateFee, rpc.rpc_starknet_estimateFee
     ),
+    models.RpcCallBench.STARKNET_ESTIMATE_MESSAGE_FEE: BenchmarkToolsRpc(
+        generators.gen_starknet_estimate_message_fee,
+        rpc.rpc_starknet_estimateMessageFee,
+    ),
+    models.RpcCallBench.STARKNET_GET_BLOCK_TRANSACTION_COUNT: BenchmarkToolsRpc(
+        generators.gen_param_block_number,
+        rpc.rpc_starknet_getBlockTransactionCount,
+    ),
+    models.RpcCallBench.STARKNET_GET_BLOCK_WITH_RECEIPTS: BenchmarkToolsRpc(
+        generators.gen_param_block_number,
+        rpc.rpc_starknet_getBlockWithReceipts,
+    ),
+    models.RpcCallBench.STARKNET_GET_BLOCK_WITH_TX_HASHES: BenchmarkToolsRpc(
+        generators.gen_param_block_number,
+        rpc.rpc_starknet_getBlockWithTxHashes,
+    ),
+    models.RpcCallBench.STARKNET_GET_BLOCK_WITH_TXS: BenchmarkToolsRpc(
+        generators.gen_param_block_number,
+        rpc.rpc_starknet_getBlockWithTxs,
+    ),
+    models.RpcCallBench.STARKNET_GET_CLASS: BenchmarkToolsRpc(
+        generators.gen_param_class_hash,
+        rpc.rpc_starknet_getClass,
+    ),
+    models.RpcCallBench.STARKNET_GET_CLASS_AT: BenchmarkToolsRpc(
+        generators.gen_param_class_contract_address,
+        rpc.rpc_starknet_getClassAt,
+    ),
+    models.RpcCallBench.STARKNET_GET_CLASS_HASH_AT: BenchmarkToolsRpc(
+        generators.gen_param_class_contract_address,
+        rpc.rpc_starknet_getClassHashAt,
+    ),
+    models.RpcCallBench.STARKNET_GET_NONCE: BenchmarkToolsRpc(
+        generators.gen_param_class_contract_address,
+        rpc.rpc_starknet_getNonce,
+    ),
+    models.RpcCallBench.STARKNET_GET_STATE_UPDATE: BenchmarkToolsRpc(
+        generators.gen_param_block_number,
+        rpc.rpc_starknet_getStateUpdate,
+    ),
+    models.RpcCallBench.STARKNET_GET_STORAGE_AT: BenchmarkToolsRpc(
+        generators.gen_starknet_getStorageAt, rpc.rpc_starknet_getStorageAt
+    ),
+    models.RpcCallBench.STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX: BenchmarkToolsRpc(
+        generators.gen_starknet_getTransactionByBlockIdAndIndex,
+        rpc.rpc_starknet_getTransactionByBlockIdAndIndex,
+    ),
+    models.RpcCallBench.STARKNET_GET_TRANSACTION_BY_HASH: BenchmarkToolsRpc(
+        generators.gen_param_tx_hash,
+        rpc.rpc_starknet_getTransactionByHash,
+    ),
+    models.RpcCallBench.STARKNET_GET_TRANSACTION_RECEIPT: BenchmarkToolsRpc(
+        generators.gen_param_tx_hash,
+        rpc.rpc_starknet_getTransactionReceipt,
+    ),
+    models.RpcCallBench.STARKNET_GET_TRANSACTION_STATUS: BenchmarkToolsRpc(
+        generators.gen_param_tx_hash,
+        rpc.rpc_starknet_getTransactionStatus,
+    ),
+    models.RpcCallBench.STARKNET_SPEC_VERSION: BenchmarkToolsRpc(
+        generators.gen_param_empty,
+        rpc.rpc_starknet_specVersion,
+    ),
+    models.RpcCallBench.STARKNET_SYNCING: BenchmarkToolsRpc(
+        generators.gen_param_empty, rpc.rpc_starknet_syncing
+    ),
     models.RpcCallBench.STARKNET_TRACE_BLOCK_TRANSACTIONS: BenchmarkToolsRpc(
-        generators.gen_starknet_traceBlockTransactions,
+        generators.gen_param_block_number,
         rpc.rpc_starknet_traceBlockTransactions,
+    ),
+    models.RpcCallBench.STARKNET_TRACE_TRANSACTION: BenchmarkToolsRpc(
+        generators.gen_param_tx_hash, rpc.rpc_starknet_traceTransaction
     ),
 }
 

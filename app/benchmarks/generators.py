@@ -11,6 +11,7 @@ from starknet_py.net.client_models import (
     DeprecatedContractClass,
     InvokeTransactionV1,
     InvokeTransactionV3,
+    L1HandlerTransaction,
     SierraContractClass,
     TransactionExecutionStatus,
 )
@@ -42,12 +43,12 @@ async def latest_common_block_number(urls: dict[models.NodeName, str]) -> int:
     return min(block_numbers)
 
 
-async def gen_empty(_: dict[models.NodeName, str]) -> InputGenerator:
+async def gen_param_empty(_: dict[models.NodeName, str]) -> InputGenerator:
     while True:
         yield {}
 
 
-async def gen_starknet_getBlockWithReceipts(
+async def gen_param_block_number(
     urls: dict[models.NodeName, str],
 ) -> InputGenerator:
     while True:
@@ -58,14 +59,7 @@ async def gen_starknet_getBlockWithReceipts(
         yield {"block_number": block_number}
 
 
-async def gen_starknet_getBlockWithTxs(
-    urls: dict[models.NodeName, str],
-) -> InputGenerator:
-    while True:
-        yield {"block_number": await latest_common_block_number(urls)}
-
-
-async def gen_starknet_getStorageAt(
+async def gen_param_class_hash(
     urls: dict[models.NodeName, str],
 ) -> InputGenerator:
     """Generates a ramdom contract storage key
@@ -83,20 +77,77 @@ async def gen_starknet_getStorageAt(
         )
         state_update = await client.get_state_update(block_number=block_number)
 
-        while len(state_update.state_diff.storage_diffs) < 2:
-            # This is safe since block 0 has storage diffs
+        while (
+            len(state_update.state_diff.declared_classes) == 0
+            and len(state_update.state_diff.deprecated_declared_classes) == 0
+        ):
+            # This is safe since block 0 has declared classes
             block_number -= 1
             state_update = await client.get_state_update(
                 block_number=block_number
             )
 
-        storage_diff = state_update.state_diff.storage_diffs[1]
-        storage_entry = storage_diff.storage_entries[0]
+        if len(state_update.state_diff.declared_classes) != 0:
+            class_hash = state_update.state_diff.declared_classes[0].class_hash
+        else:
+            class_hash = state_update.state_diff.deprecated_declared_classes[0]
+
         yield {
-            "contract_address": storage_diff.address,
-            "key": storage_entry.key,
+            "class_hash": class_hash,
             "block_number": block_number,
         }
+
+
+async def gen_param_class_contract_address(
+    urls: dict[models.NodeName, str],
+) -> InputGenerator:
+    """Generates a ramdom contract storage key
+
+    Key is taken from the state diffs over the last 1000 common blocks. It is
+    possible for a key to be generated that falls before that range in some
+    rare cases where the random block to have been chose had no storage diffs
+    """
+    client = FullNodeClient(node_url=next(iter(urls.values())))
+
+    while True:
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - GENERATE_RANGE, 0), block_number
+        )
+        state_update = await client.get_state_update(block_number=block_number)
+
+        while len(state_update.state_diff.deployed_contracts) == 0:
+            # This is safe since block 0 has declared classes
+            block_number -= 1
+            state_update = await client.get_state_update(
+                block_number=block_number
+            )
+
+        contract_address = state_update.state_diff.deployed_contracts[0].address
+
+        yield {
+            "contract_address": contract_address,
+            "block_number": block_number,
+        }
+
+
+async def gen_param_tx_hash(
+    urls: dict[models.NodeName, str],
+) -> InputGenerator:
+    client = FullNodeClient(node_url=next(iter(urls.values())))
+
+    while True:
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - GENERATE_RANGE, 0), block_number
+        )
+        block = await client.get_block(block_number=block_number)
+
+        while len(block.transactions) == 0:
+            block_number -= 1
+            block = await client.get_block(block_number=block_number)
+
+        yield {"tx_hash": block.transactions[0].hash}
 
 
 async def gen_starknet_estimateFee(
@@ -135,6 +186,7 @@ async def gen_starknet_estimateFee(
             tx_status = tx_status.execution_status
 
         tx = txs[0]
+
         if isinstance(tx, InvokeTransactionV1):
             tx = InvokeV1(
                 version=tx.version,
@@ -210,12 +262,106 @@ async def gen_starknet_estimateFee(
         yield {"tx": tx, "block_number": block_number - 1}
 
 
-async def gen_starknet_traceBlockTransactions(
+async def gen_starknet_estimate_message_fee(
     urls: dict[models.NodeName, str],
 ) -> InputGenerator:
+    client = FullNodeClient(node_url=next(iter(urls.values())))
+
     while True:
         block_number = await latest_common_block_number(urls)
         block_number = random.randrange(
             max(block_number - GENERATE_RANGE, 0), block_number
         )
-        yield {"block_number": block_number}
+        block = await client.get_block(block_number=block_number)
+        txs = block.transactions
+
+        if len(txs) > 0:
+            tx_status = await client.get_transaction_status(
+                typing.cast(int, txs[0].hash)
+            )
+            tx_status = tx_status.execution_status
+        else:
+            tx_status = TransactionExecutionStatus.SUCCEEDED
+
+        while (
+            len(txs) == 0
+            or not isinstance(txs[0], L1HandlerTransaction)
+            or tx_status == TransactionExecutionStatus.REVERTED
+        ):
+            # FIX: this could fail if called too early in the sync
+            block_number -= 1
+
+            block = await client.get_block(block_number=block_number)
+            txs = block.transactions
+            tx_status = await client.get_transaction_status(
+                typing.cast(int, txs[0].hash)
+            )
+            tx_status = tx_status.execution_status
+
+        tx = txs[0]
+
+        yield {
+            "body": models.body._BodyEstimateMessageFee(
+                from_address="0x0",
+                to_address=tx.contract_address,
+                entry_point_selector=tx.entry_point_selector,
+                payload=tx.calldata,
+            ),
+            "block_number": block_number,
+        }
+
+
+async def gen_starknet_getStorageAt(
+    urls: dict[models.NodeName, str],
+) -> InputGenerator:
+    """Generates a ramdom contract storage key
+
+    Key is taken from the state diffs over the last 1000 common blocks. It is
+    possible for a key to be generated that falls before that range in some
+    rare cases where the random block to have been chose had no storage diffs
+    """
+    client = FullNodeClient(node_url=next(iter(urls.values())))
+
+    while True:
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - GENERATE_RANGE, 0), block_number
+        )
+        state_update = await client.get_state_update(block_number=block_number)
+
+        while len(state_update.state_diff.storage_diffs) < 2:
+            # This is safe since block 0 has storage diffs
+            block_number -= 1
+            state_update = await client.get_state_update(
+                block_number=block_number
+            )
+
+        storage_diff = state_update.state_diff.storage_diffs[1]
+        storage_entry = storage_diff.storage_entries[0]
+        yield {
+            "contract_address": storage_diff.address,
+            "key": storage_entry.key,
+            "block_number": block_number,
+        }
+
+
+async def gen_starknet_getTransactionByBlockIdAndIndex(
+    urls: dict[models.NodeName, str],
+) -> InputGenerator:
+    client = FullNodeClient(node_url=next(iter(urls.values())))
+
+    while True:
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - GENERATE_RANGE, 0), block_number
+        )
+        block = await client.get_block(block_number=block_number)
+
+        while len(block.transactions) == 0:
+            block_number -= 1
+            block = await client.get_block(block_number=block_number)
+
+        yield {
+            "index": random.randrange(0, len(block.transactions)),
+            "block_number": block_number,
+        }

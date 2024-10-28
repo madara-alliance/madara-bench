@@ -5,6 +5,7 @@ import docker
 import fastapi
 import requests
 from docker import errors as docker_errors
+from starknet_py.net.client_errors import ClientError
 from starknet_py.net.client_models import (
     BlockHashAndNumber,
     BlockStateUpdate,
@@ -86,14 +87,14 @@ app = fastapi.FastAPI()
 async def excepton_handler_docker_not_found(
     request: fastapi.Request, _: docker_errors.APIError
 ):
-    raise error.ErrorNodeNotFound(request.path_params["node"])
+    raise error.ErrorNodeNotFound(request.path_params.get("node", "all"))
 
 
 @app.exception_handler(docker_errors.APIError)
 async def excepton_handler_docker_api_error(
     request: fastapi.Request, _: docker_errors.APIError
 ):
-    raise error.ErrorNodeSilent(request.path_params["node"])
+    raise error.ErrorNodeSilent(request.path_params.get("node", "all"))
 
 
 @app.exception_handler(requests.exceptions.JSONDecodeError)
@@ -104,6 +105,18 @@ async def exception_handler_requests_json_decode_error(
         str(request.url).removeprefix(str(request.base_url)).partition("?")[0]
     )
     raise error.ErrorJsonDecode(request.path_params["node"], api_call, err)
+
+
+@app.exception_handler(ClientError)
+async def exception_handler_client_error(
+    request: fastapi.Request, err: ClientError
+):
+    api_call = (
+        str(request.url).removeprefix(str(request.base_url)).partition("?")[0]
+    )
+    raise error.ErrorRpcCall(
+        request.path_params.get("node", "all"), models.RpcCall(api_call), err
+    )
 
 
 # =========================================================================== #
@@ -404,7 +417,7 @@ async def starknet_getClass(
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
 ) -> models.ResponseModelJSON[SierraContractClass | DeprecatedContractClass]:
-    return await rpc.rpc_starnet_getClass(
+    return await rpc.rpc_starknet_getClass(
         url.node,
         url.info,
         class_hash,

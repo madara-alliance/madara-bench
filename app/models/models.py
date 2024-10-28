@@ -62,13 +62,33 @@ class RpcCallBench(str, Enum):
     """
 
     # Read API
+    STARKNET_BLOCK_HASH_AND_NUMBER = "starknet_blockHashAndNumber"
+    STARKNET_BLOCK_NUMBER = "starknet_blockNumber"
+    STARKNET_CHAIN_ID = "starknet_chainId"
     STARKNET_ESTIMATE_FEE = "starknet_estimateFee"
+    STARKNET_ESTIMATE_MESSAGE_FEE = "starknet_estimateMessageFee"
+    STARKNET_GET_BLOCK_TRANSACTION_COUNT = "starknet_getBlockTransactionCount"
     STARKNET_GET_BLOCK_WITH_RECEIPTS = "starknet_getBlockWithReceipts"
+    STARKNET_GET_BLOCK_WITH_TX_HASHES = "starknet_getBlockWithTxHashes"
     STARKNET_GET_BLOCK_WITH_TXS = "starknet_getBlockWithTxs"
+    STARKNET_GET_CLASS = "starknet_getClass"
+    STARKNET_GET_CLASS_AT = "starknet_getClassAt"
+    STARKNET_GET_CLASS_HASH_AT = "starknet_getClassHashAt"
+    STARKNET_GET_NONCE = "starknet_getNonce"
+    STARKNET_GET_STATE_UPDATE = "starknet_getStateUpdate"
     STARKNET_GET_STORAGE_AT = "starknet_getStorageAt"
+    STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX = (
+        "starknet_getTransactionByBlockIdAndIndex"
+    )
+    STARKNET_GET_TRANSACTION_BY_HASH = "starknet_getTransactionByHash"
+    STARKNET_GET_TRANSACTION_RECEIPT = "starknet_getTransactionReceipt"
+    STARKNET_GET_TRANSACTION_STATUS = "starknet_getTransactionStatus"
+    STARKNET_SPEC_VERSION = "starknet_specVersion"
+    STARKNET_SYNCING = "starknet_syncing"
 
     # Trace API
     STARKNET_TRACE_BLOCK_TRANSACTIONS = "starknet_traceBlockTransactions"
+    STARKNET_TRACE_TRANSACTION = "starknet_traceTransaction"
 
 
 class SystemMetric(str, Enum):

@@ -324,7 +324,7 @@ async def rpc_starknet_getBlockWithTxs(
     )
 
 
-async def rpc_starnet_getClass(
+async def rpc_starknet_getClass(
     node: NodeName,
     url: str,
     class_hash: models.query.ClassHash,
