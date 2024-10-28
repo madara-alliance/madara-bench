@@ -87,6 +87,7 @@ class RpcCallBench(str, Enum):
     STARKNET_SYNCING = "starknet_syncing"
 
     # Trace API
+    STARKNET_SIMULATE_TRANSACTIONS = "starknet_simulateTransactions"
     STARKNET_TRACE_BLOCK_TRANSACTIONS = "starknet_traceBlockTransactions"
     STARKNET_TRACE_TRANSACTION = "starknet_traceTransaction"
 

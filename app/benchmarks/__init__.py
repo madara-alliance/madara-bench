@@ -130,6 +130,10 @@ MAPPINGS_RPC: dict[models.RpcCallBench, BenchmarkToolsRpc] = {
     models.RpcCallBench.STARKNET_SYNCING: BenchmarkToolsRpc(
         generators.gen_param_empty, rpc.rpc_starknet_syncing
     ),
+    models.RpcCallBench.STARKNET_SIMULATE_TRANSACTIONS: BenchmarkToolsRpc(
+        generators.gen_starknet_simulateTransactions,
+        rpc.rpc_starknet_simulateTransactions,
+    ),
     models.RpcCallBench.STARKNET_TRACE_BLOCK_TRANSACTIONS: BenchmarkToolsRpc(
         generators.gen_param_block_number,
         rpc.rpc_starknet_traceBlockTransactions,

@@ -13,6 +13,7 @@ from starknet_py.net.client_models import (
     InvokeTransactionV3,
     L1HandlerTransaction,
     SierraContractClass,
+    Transaction,
     TransactionExecutionStatus,
 )
 from starknet_py.net.full_node_client import FullNodeClient
@@ -32,6 +33,93 @@ GENERATE_RANGE: int = 1_000
 
 
 InputGenerator = AsyncGenerator[dict[str, Any], Any]
+
+
+async def tx_conv(
+    tx: Transaction, client: FullNodeClient
+) -> (
+    InvokeV1
+    | InvokeV3
+    | DeclareV1
+    | DeclareV2
+    | DeclareV3
+    | DeployAccountV1
+    | DeployAccountV3
+):
+    if isinstance(tx, InvokeTransactionV1):
+        tx_conv = InvokeV1(
+            version=tx.version,
+            signature=tx.signature,
+            nonce=tx.nonce,
+            max_fee=tx.max_fee,
+            sender_address=tx.sender_address,
+            calldata=tx.calldata,
+        )
+    elif isinstance(tx, InvokeTransactionV3):
+        tx_conv = InvokeV3(
+            version=tx.version,
+            signature=tx.signature,
+            nonce=tx.nonce,
+            resource_bounds=tx.resource_bounds,
+            calldata=tx.calldata,
+            sender_address=tx.sender_address,
+            account_deployment_data=tx.account_deployment_data,
+        )
+    elif isinstance(tx, DeclareTransactionV1):
+        contract_class = await client.get_class_by_hash(tx.class_hash)
+        tx_conv = DeclareV1(
+            version=tx.version,
+            signature=tx.signature,
+            nonce=tx.nonce,
+            max_fee=tx.max_fee,
+            contract_class=cast(DeprecatedContractClass, contract_class),
+            sender_address=tx.sender_address,
+        )
+    elif isinstance(tx, DeclareTransactionV2):
+        contract_class = await client.get_class_by_hash(tx.class_hash)
+        tx_conv = DeclareV2(
+            version=tx.version,
+            signature=tx.signature,
+            nonce=tx.nonce,
+            max_fee=tx.max_fee,
+            contract_class=cast(SierraContractClass, contract_class),
+            compiled_class_hash=tx.compiled_class_hash,
+            sender_address=tx.sender_address,
+        )
+    elif isinstance(tx, DeclareTransactionV3):
+        contract_class = await client.get_class_by_hash(tx.class_hash)
+        tx_conv = DeclareV3(
+            version=tx.version,
+            signature=tx.signature,
+            nonce=tx.nonce,
+            resource_bounds=tx.resource_bounds,
+            sender_address=tx.sender_address,
+            compiled_class_hash=tx.compiled_class_hash,
+            contract_class=cast(SierraContractClass, contract_class),
+            account_deployment_data=tx.account_deployment_data,
+        )
+    elif isinstance(tx, DeployAccountTransactionV1):
+        tx_conv = DeployAccountV1(
+            version=tx.version,
+            signature=tx.signature,
+            nonce=tx.nonce,
+            max_fee=tx.max_fee,
+            class_hash=tx.class_hash,
+            contract_address_salt=tx.contract_address_salt,
+            constructor_calldata=tx.constructor_calldata,
+        )
+    elif isinstance(tx, DeployAccountTransactionV3):
+        tx_conv = DeployAccountV3(
+            version=tx.version,
+            signature=tx.signature,
+            nonce=tx.nonce,
+            resource_bounds=tx.resource_bounds,
+            class_hash=tx.class_hash,
+            contract_address_salt=tx.contract_address_salt,
+            constructor_calldata=tx.constructor_calldata,
+        )
+
+    return tx_conv
 
 
 async def latest_common_block_number(urls: dict[models.NodeName, str]) -> int:
@@ -185,80 +273,8 @@ async def gen_starknet_estimateFee(
             )
             tx_status = tx_status.execution_status
 
-        tx = txs[0]
+        tx = await tx_conv(txs[0], client)
 
-        if isinstance(tx, InvokeTransactionV1):
-            tx = InvokeV1(
-                version=tx.version,
-                signature=tx.signature,
-                nonce=tx.nonce,
-                max_fee=tx.max_fee,
-                sender_address=tx.sender_address,
-                calldata=tx.calldata,
-            )
-        elif isinstance(tx, InvokeTransactionV3):
-            tx = InvokeV3(
-                version=tx.version,
-                signature=tx.signature,
-                nonce=tx.nonce,
-                resource_bounds=tx.resource_bounds,
-                calldata=tx.calldata,
-                sender_address=tx.sender_address,
-                account_deployment_data=tx.account_deployment_data,
-            )
-        elif isinstance(tx, DeclareTransactionV1):
-            contract_class = await client.get_class_by_hash(tx.class_hash)
-            tx = DeclareV1(
-                version=tx.version,
-                signature=tx.signature,
-                nonce=tx.nonce,
-                max_fee=tx.max_fee,
-                contract_class=cast(DeprecatedContractClass, contract_class),
-                sender_address=tx.sender_address,
-            )
-        elif isinstance(tx, DeclareTransactionV2):
-            contract_class = await client.get_class_by_hash(tx.class_hash)
-            tx = DeclareV2(
-                version=tx.version,
-                signature=tx.signature,
-                nonce=tx.nonce,
-                max_fee=tx.max_fee,
-                contract_class=cast(SierraContractClass, contract_class),
-                compiled_class_hash=tx.compiled_class_hash,
-                sender_address=tx.sender_address,
-            )
-        elif isinstance(tx, DeclareTransactionV3):
-            contract_class = await client.get_class_by_hash(tx.class_hash)
-            tx = DeclareV3(
-                version=tx.version,
-                signature=tx.signature,
-                nonce=tx.nonce,
-                resource_bounds=tx.resource_bounds,
-                sender_address=tx.sender_address,
-                compiled_class_hash=tx.compiled_class_hash,
-                contract_class=cast(SierraContractClass, contract_class),
-                account_deployment_data=tx.account_deployment_data,
-            )
-        elif isinstance(tx, DeployAccountTransactionV1):
-            tx = DeployAccountV1(
-                version=tx.version,
-                signature=tx.signature,
-                nonce=tx.nonce,
-                max_fee=tx.max_fee,
-                class_hash=tx.class_hash,
-                contract_address_salt=tx.contract_address_salt,
-                constructor_calldata=tx.constructor_calldata,
-            )
-        elif isinstance(tx, DeployAccountTransactionV3):
-            tx = DeployAccountV3(
-                version=tx.version,
-                signature=tx.signature,
-                nonce=tx.nonce,
-                resource_bounds=tx.resource_bounds,
-                class_hash=tx.class_hash,
-                contract_address_salt=tx.contract_address_salt,
-                constructor_calldata=tx.constructor_calldata,
-            )
         yield {"tx": tx, "block_number": block_number - 1}
 
 
@@ -363,5 +379,49 @@ async def gen_starknet_getTransactionByBlockIdAndIndex(
 
         yield {
             "index": random.randrange(0, len(block.transactions)),
+            "block_number": block_number,
+        }
+
+
+async def gen_starknet_simulateTransactions(
+    urls: dict[models.NodeName, str],
+) -> InputGenerator:
+    client = FullNodeClient(node_url=next(iter(urls.values())))
+
+    while True:
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - GENERATE_RANGE, 0), block_number
+        )
+        block = await client.get_block(block_number=block_number)
+        txs = block.transactions
+
+        if len(txs) > 0:
+            tx_status = await client.get_transaction_status(
+                typing.cast(int, txs[0].hash)
+            )
+            tx_status = tx_status.execution_status
+        else:
+            tx_status = TransactionExecutionStatus.SUCCEEDED
+
+        # Allows reverted transactions to be simulated
+        while len(txs) == 0 or txs[0].version == 0:
+            # FIX: this could fail if called too early in the sync
+            block_number -= 1
+            block = await client.get_block(block_number=block_number)
+            txs = block.transactions
+            tx_status = await client.get_transaction_status(
+                typing.cast(int, txs[0].hash)
+            )
+            tx_status = tx_status.execution_status
+
+        txs = [
+            await tx_conv(txs[0], client)
+            for tx in block.transactions
+            if not isinstance(tx, L1HandlerTransaction)
+        ]
+
+        yield {
+            "body": models.body._BodySimulateTransactions(transactions=txs),
             "block_number": block_number,
         }
