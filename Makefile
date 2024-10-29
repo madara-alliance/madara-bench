@@ -167,17 +167,17 @@ stop: stop-madara stop-juno stop-pathfinder
 .PHONY: logs-madara
 logs-madara:
 	@echo -e "$(TERTIARY)logs for $(INFO)madara$(RESET)";
-	@docker-compose -f madara/compose.yaml logs -f;
+	@docker-compose -f madara/compose.yaml logs -f -n 100;
 
 .PHONY: logs-juno
 logs-juno:
 	@echo -e "$(TERTIARY)logs for $(INFO)juno$(RESET)";
-	@docker-compose -f juno/compose.yaml logs -f;
+	@docker-compose -f juno/compose.yaml logs -f -n 100;
 
 .PHONY: logs-pathfinder
 logs-pathfinder:
 	@echo -e "$(TERTIARY)logs for $(INFO)pathfinder$(RESET)";
-	@docker-compose -f pathfinder/compose.yaml logs -f;
+	@docker-compose -f pathfinder/compose.yaml logs -f -n 100;
 
 .PHONY: images
 images: $(IMGS)
