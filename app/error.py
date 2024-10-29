@@ -119,6 +119,14 @@ class ErrorRpcCall(fastapi.HTTPException):
         )
 
 
+class ErrorNoInputFound(fastapi.HTTPException):
+    def __init__(self, method: models.RpcCallBench) -> None:
+        super().__init__(
+            status_code=fastapi.status.HTTP_412_PRECONDITION_FAILED,
+            detail=f"Found no valid input to benchmark {method.value} with",
+        )
+
+
 def ensure_container_is_running(node: models.NodeName, container: Container):
     if container.status != "running":
         raise ErrorNodeNotRunning(node)

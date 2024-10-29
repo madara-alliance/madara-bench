@@ -27,7 +27,7 @@ from starknet_py.net.models.transaction import (
     InvokeV3,
 )
 
-from app import models, rpc
+from app import error, models, rpc
 
 GENERATE_RANGE: int = 1_000
 
@@ -232,6 +232,7 @@ async def gen_param_tx_hash(
         block = await client.get_block(block_number=block_number)
 
         while len(block.transactions) == 0:
+            # This is safe since block 0 has transactions
             block_number -= 1
             block = await client.get_block(block_number=block_number)
 
@@ -264,8 +265,13 @@ async def gen_starknet_estimateFee(
             or txs[0].version == 0
             or tx_status == TransactionExecutionStatus.REVERTED
         ):
-            # FIX: this could fail if called too early in the sync
             block_number -= 1
+
+            if block_number < 0:
+                raise error.ErrorNoInputFound(
+                    models.RpcCallBench.STARKNET_ESTIMATE_FEE
+                )
+
             block = await client.get_block(block_number=block_number)
             txs = block.transactions
             tx_status = await client.get_transaction_status(
@@ -304,8 +310,12 @@ async def gen_starknet_estimate_message_fee(
             or not isinstance(txs[0], L1HandlerTransaction)
             or tx_status == TransactionExecutionStatus.REVERTED
         ):
-            # FIX: this could fail if called too early in the sync
             block_number -= 1
+
+            if block_number < 0:
+                raise error.ErrorNoInputFound(
+                    models.RpcCallBench.STARKNET_ESTIMATE_FEE
+                )
 
             block = await client.get_block(block_number=block_number)
             txs = block.transactions
@@ -347,6 +357,12 @@ async def gen_starknet_getEvents(
             and len(block_with_receits.transactions[0].receipt.events) == 0
         ):
             block_number -= 1
+
+            if block_number < 0:
+                raise error.ErrorNoInputFound(
+                    models.RpcCallBench.STARKNET_ESTIMATE_FEE
+                )
+
             block_with_receits = await client.get_block_with_receipts(
                 block_number=block_number
             )
@@ -357,7 +373,7 @@ async def gen_starknet_getEvents(
             "body": models.body._BodyGetEvents(
                 address=events[0].from_address,
                 keys=[events[0].keys],
-                from_block_number=block_number - GENERATE_RANGE,
+                from_block_number=max(0, block_number - GENERATE_RANGE),
             )
         }
 
@@ -409,6 +425,7 @@ async def gen_starknet_getTransactionByBlockIdAndIndex(
         block = await client.get_block(block_number=block_number)
 
         while len(block.transactions) == 0:
+            # This is safe since block 0 has transactions
             block_number -= 1
             block = await client.get_block(block_number=block_number)
 
@@ -441,8 +458,13 @@ async def gen_starknet_simulateTransactions(
 
         # Allows reverted transactions to be simulated
         while len(txs) == 0 or txs[0].version == 0:
-            # FIX: this could fail if called too early in the sync
             block_number -= 1
+
+            if block_number < 0:
+                raise error.ErrorNoInputFound(
+                    models.RpcCallBench.STARKNET_ESTIMATE_FEE
+                )
+
             block = await client.get_block(block_number=block_number)
             txs = block.transactions
             tx_status = await client.get_transaction_status(

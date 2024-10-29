@@ -45,6 +45,10 @@ ERROR_CODES: dict[int, dict[str, Any]] = {
         "description": "Method was called with an invalid transaction type",
         "model": error.ErrorMessage,
     },
+    fastapi.status.HTTP_412_PRECONDITION_FAILED: {
+        "description": "Could not generate benchmarking input",
+        "model": error.ErrorMessage,
+    },
     fastapi.status.HTTP_417_EXPECTATION_FAILED: {
         "description": "Node exists but is not running",
         "model": error.ErrorMessage,
