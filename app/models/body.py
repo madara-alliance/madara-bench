@@ -99,7 +99,7 @@ class _BodyGetEvents(pydantic.BaseModel):
         ),
     ]
     keys: Annotated[
-        list[list[Hash]],
+        list[list[Hash]] | None,
         pydantic.Field(
             description=(
                 "Value used to filter events. Each key designate the possible "
@@ -107,7 +107,7 @@ class _BodyGetEvents(pydantic.BaseModel):
                 "designates 'any' value"
             )
         ),
-    ]
+    ] = None
     from_block_number: Annotated[
         BlockNumber | None,
         pydantic.Field(description="Filter events from this block (inclusive)"),

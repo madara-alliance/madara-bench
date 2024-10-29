@@ -480,7 +480,7 @@ async def starknet_getEvents(
     url: deps.Url,
     body: models.body.GetEvents,
 ) -> models.ResponseModelJSON[EventsChunk]:
-    return await rpc.rcp_starknet_getEvents(url.node, url.info, body)
+    return await rpc.rpc_starknet_getEvents(url.node, url.info, body)
 
 
 @app.get(

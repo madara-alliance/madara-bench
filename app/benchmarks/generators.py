@@ -327,6 +327,41 @@ async def gen_starknet_estimate_message_fee(
         }
 
 
+async def gen_starknet_getEvents(
+    urls: dict[models.NodeName, str],
+) -> InputGenerator:
+    client = FullNodeClient(node_url=next(iter(urls.values())))
+
+    while True:
+        block_number = await latest_common_block_number(urls)
+        block_number = random.randrange(
+            max(block_number - GENERATE_RANGE, 0), block_number
+        )
+
+        block_with_receits = await client.get_block_with_receipts(
+            block_number=block_number
+        )
+
+        while (
+            len(block_with_receits.transactions) == 0
+            and len(block_with_receits.transactions[0].receipt.events) == 0
+        ):
+            block_number -= 1
+            block_with_receits = await client.get_block_with_receipts(
+                block_number=block_number
+            )
+
+        events = block_with_receits.transactions[0].receipt.events
+
+        yield {
+            "body": models.body._BodyGetEvents(
+                address=events[0].from_address,
+                keys=[events[0].keys],
+                from_block_number=block_number - GENERATE_RANGE,
+            )
+        }
+
+
 async def gen_starknet_getStorageAt(
     urls: dict[models.NodeName, str],
 ) -> InputGenerator:
@@ -416,7 +451,7 @@ async def gen_starknet_simulateTransactions(
             tx_status = tx_status.execution_status
 
         txs = [
-            await tx_conv(txs[0], client)
+            await tx_conv(tx, client)
             for tx in block.transactions
             if not isinstance(tx, L1HandlerTransaction)
         ]

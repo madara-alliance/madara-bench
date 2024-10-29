@@ -382,7 +382,7 @@ async def rpc_starknet_getClassHashAt(
     )
 
 
-async def rcp_starknet_getEvents(
+async def rpc_starknet_getEvents(
     node: NodeName, url: str, body: models.body.GetEvents
 ) -> models.ResponseModelJSON[EventsChunk]:
     client = FullNodeClient(node_url=url)
@@ -393,7 +393,7 @@ async def rcp_starknet_getEvents(
         from_block_hash=body.from_block_hash,
         to_block_number=body.to_block_number,
         to_block_hash=body.to_block_hash,
-        follow_continuation_token=body.continuation_token is None,
+        follow_continuation_token=body.continuation_token is not None,
         continuation_token=body.continuation_token,
         chunk_size=body.chunk_size,
     )

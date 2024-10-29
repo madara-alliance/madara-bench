@@ -74,6 +74,7 @@ class RpcCallBench(str, Enum):
     STARKNET_GET_CLASS = "starknet_getClass"
     STARKNET_GET_CLASS_AT = "starknet_getClassAt"
     STARKNET_GET_CLASS_HASH_AT = "starknet_getClassHashAt"
+    STARKNET_GET_EVENTS = "starknet_getEvents"
     STARKNET_GET_NONCE = "starknet_getNonce"
     STARKNET_GET_STATE_UPDATE = "starknet_getStateUpdate"
     STARKNET_GET_STORAGE_AT = "starknet_getStorageAt"

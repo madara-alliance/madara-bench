@@ -96,6 +96,10 @@ MAPPINGS_RPC: dict[models.RpcCallBench, BenchmarkToolsRpc] = {
         generators.gen_param_class_contract_address,
         rpc.rpc_starknet_getClassHashAt,
     ),
+    models.RpcCallBench.STARKNET_GET_EVENTS: BenchmarkToolsRpc(
+        generators.gen_starknet_getEvents,
+        rpc.rpc_starknet_getEvents,
+    ),
     models.RpcCallBench.STARKNET_GET_NONCE: BenchmarkToolsRpc(
         generators.gen_param_class_contract_address,
         rpc.rpc_starknet_getNonce,
