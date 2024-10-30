@@ -10,7 +10,7 @@ SECRETS  := secrets/rpc_api.secret     \
             secrets/gateway_key.secret
 
 DEPS     := poetry install
-RUNNER   := poetry run fastapi run app
+RUNNER   := poetry run fastapi dev --host 0.0.0.0 app
 
 define HELP
 Starknet Node Benchmark Runner

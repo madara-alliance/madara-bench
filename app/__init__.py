@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Any
 
@@ -27,7 +28,7 @@ from starknet_py.net.client_models import (
     TransactionStatusResponse,
 )
 
-from app import benchmarks, deps, error, logging, models, rpc, system
+from app import benchmarks, database, deps, error, logging, models, rpc, system
 
 MADARA: str = "madara_runner"
 MADARA_DB: str = "madara_runner_db"
@@ -83,8 +84,23 @@ class Tags(str, Enum):
     DEBUG = "debug"
 
 
+# =========================================================================== #
+#                                   LIFESPAN                                  #
+# =========================================================================== #
+
+
+@asynccontextmanager
+async def lifespan(_: fastapi.FastAPI):
+    database.init_db_and_tables()
+    yield
+
+
+# =========================================================================== #
+#                                    FASTAPI                                  #
+# =========================================================================== #
+
 logger = logging.get_logger()
-app = fastapi.FastAPI()
+app = fastapi.FastAPI(lifespan=lifespan)
 
 
 @app.exception_handler(docker_errors.NotFound)
@@ -711,3 +727,31 @@ async def docker_get_ports(node: models.NodeName):
 
     container = system.container_get(node)
     return container.ports
+
+
+@app.post("/info/db/add_message", tags=[Tags.DEBUG])
+async def db_message_add(
+    message: database.MessageInOut, session: deps.Session
+) -> database.MessageDb:
+    message_db = database.MessageDb.model_validate(message)
+    session.add(message_db)
+    session.commit()
+    session.refresh(message_db)
+    return message_db
+
+
+@app.get(
+    "/info/db/get_message",
+    response_model=database.MessageInOut,
+    tags=[Tags.DEBUG],
+)
+async def db_message_get(
+    message_id: int, session: deps.Session
+) -> database.MessageDb:
+    message = session.get(database.MessageDb, message_id)
+    if not message:
+        raise fastapi.HTTPException(
+            status_code=fastapi.status.HTTP_404_NOT_FOUND,
+            detail="message not found",
+        )
+    return message

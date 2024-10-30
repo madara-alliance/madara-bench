@@ -1,0 +1,11 @@
+name: timescaledb
+
+services:
+  timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    container_name: "timescaledb"
+    ports:
+      - "127.0.0.1:5432:5432"
+    env_file: ./db.env
+    volumes:
+      - ./data:/var/lib/postgresql/data

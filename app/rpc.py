@@ -30,7 +30,7 @@ from starknet_py.net.client_models import (
 from starknet_py.net.full_node_client import FullNodeClient
 from starknet_py.net.models.transaction import AccountTransaction
 
-from app import error, logging, models
+from app import error, models
 from app.models.models import NodeName
 
 RPC_PORT_MADARA: str = "9944/tcp"
@@ -40,8 +40,6 @@ DOCKER_HOST_PORT: str = "HostPort"
 DOCKER_HOST_IP: str = "HostIp"
 
 T = TypeVar("T")
-
-logger = logging.get_logger()
 
 
 def json_rpc(
@@ -81,8 +79,6 @@ async def json_rpc_starknet_py(
     try:
         output = await caller
     except ClientError as e:
-        logger.error(f"{node.name.capitalize()}: failed {method.value}")
-        logger.error(f"{node.name.capitalize()}: {e}")
         raise error.ErrorRpcCall(node, method, e)
 
     perf_stop = time.perf_counter_ns()

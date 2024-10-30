@@ -2,9 +2,10 @@ from dataclasses import dataclass
 from typing import Annotated, Generic, TypeVar
 
 import fastapi
+import sqlmodel
 from docker.models.containers import Container as DockerContainer
 
-from app import models, rpc, system
+from app import database, models, rpc, system
 
 T = TypeVar("T")
 
@@ -32,3 +33,6 @@ def deps_url(
 
 
 Url = Annotated[NodeInfo[str], fastapi.Depends(deps_url)]
+
+
+Session = Annotated[sqlmodel.Session, fastapi.Depends(database.session)]

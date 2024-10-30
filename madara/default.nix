@@ -31,75 +31,13 @@ with import <nixpkgs>
 
   cairoVersion = "2.8.2";
 
-  # Required to build scarb
-  cairoArchive = fetchurl {
-    name = "cairo-archive-${cairoVersion}";
-    url = "https://github.com/starkware-libs/cairo/archive/v${cairoVersion}.zip";
-    sha256 = "sha256-biuqlMHtm7Ub97O4HvujNx/RPWdZMxaoLvtv5or8v4U=";
-  };
-
-  scarbVersion = "2.8.2";
-
-  # Scarb, the cairo package manager, used to run contracts for devenet
-  # integration in the madara node
-  scarbSrc = fetchFromGitHub {
-    owner = "software-mansion";
-    repo = "scarb";
-    rev = "aaa5a5f74d20490a5f812a35a2705aeea3b55b68";
-    hash = "sha256-1aE1vZvNEDmxT1tXwQDm5smFv2Yf434WaBC8rd5TYYQ=";
-  };
-
-  # Building scarb with nix
-  scarb = rustPlatform.buildRustPackage rec {
-    pname = "scarb";
-    version = scarbVersion;
-
-    src = scarbSrc;
-
-    # This is neeed by a buildscript in scarb/utils/scarb-build-metadata/build.rs
-    CARGO_MANIFEST_DIR = "${scarbSrc}";
-    CARGO_PKG_NAME = "scarb";
-    CAIRO_ARCHIVE = cairoArchive;
-
-    cargoLock = {
-      lockFile = scarbSrc + "/Cargo.lock";
-      allowBuiltinFetchGit = true;
-    };
-
-    nativeBuildInputs = with pkgs; [
-      pkg-config
-      openssl
-      clang
-      perl
-      cmake
-    ];
-
-    buildInputs = with pkgs; [
-      openssl
-    ];
-
-    doCheck = false;
-
-    preBuild = ''
-      export LIBCLANG_PATH=${llvmPackages.libclang.lib}/lib
-    '';
-  };
-
-  cairo-contracts = fetchgit {
-    url = "https://github.com/openzeppelin/cairo-contracts";
-    rev = "bac08ee8c47a87e4060d196bf30abc184930c247";
-    sha256 = "sha256-GziEDo51Cl8XtD4o3OXb4Qn21R3eHTgCnPvY4GwXpV8=";
-  };
-
-  toTOML = pkgs.formats.toml {};
-
   # The version of Madara being used
   # Updating this might also cause other nix hashes to need to be re-specified.
   madaraSrc = fetchFromGitHub {
     owner = "madara-alliance";
     repo = "madara";
-    rev = "9f11048d12e6198937ea47724a98adba42c25e84";
-    sha256 = "sha256-ZRKZh6i1xV1AXEHeLpNZz+bU2RpCZnndNc9h9OZPr+w=";
+    rev = "a0fa067eea3e00dd8c994a8ad0c62004695df3b3";
+    sha256 = "sha256-c1vQA6qi+KmGii2nvDiJcY3Al8eAR5crCy4cfwoUhO0=";
   };
 
   # Building madara with nix
@@ -109,10 +47,6 @@ with import <nixpkgs>
     version = "latest";
 
     src = madaraSrc;
-
-    SCARB_TARGET_DIR = madaraSrc + "/target";
-    SCARB_CACHE = "/tmp/.cache/scarab";
-    CAIRO_ARCHIVE = cairoArchive;
 
     cargoLock = {
       lockFile = madaraSrc + "/Cargo.lock";
@@ -124,12 +58,14 @@ with import <nixpkgs>
       protobuf
       openssl
       clang
-      scarb
     ];
 
     buildInputs = with pkgs; [
       openssl
     ];
+
+    stripAllFlags = ["--strip-all" "--remove-section=.comment" "--remove-section=.note"];
+    # allowedReferences = ["out"];
 
     # This will currently fail due to how scarb is used in the codebase,
     # resulting in an impure build which requires network access to download
@@ -151,86 +87,102 @@ with import <nixpkgs>
     '';
   };
 
+  minimal-madara = stdenv.mkDerivation {
+    name = "minimal-madara";
+
+    # Only need the original binary as input
+    src = madara;
+
+    nativeBuildInputs = [upx];
+
+    buildPhase = ''
+      cp $src/bin/madara madara
+      chmod +w madara
+      upx --best madara
+    '';
+
+    installPhase = ''
+      mkdir -p $out/bin
+      cp madara $out/bin/
+      chmod +x $out/bin/madara
+    '';
+  };
+
+  # This is necessary to avoid 'unable to get local issuer certificate'
+  # https://discourse.nixos.org/t/adding-a-new-ca-certificate-to-included-bundle/14301/8
+  minimal-cacert = stdenv.mkDerivation {
+    name = "minimal-cacert";
+    buildInputs = [cacert];
+    buildCommand = ''
+      mkdir -p $out/etc/ssl/certs
+      cp ${cacert}/etc/ssl/certs/ca-bundle.crt $out/etc/ssl/certs/
+    '';
+  };
+
+  minimal-stdcpp = stdenv.mkDerivation {
+    name = "minimal-stdcpp";
+    phases = ["installPhase"];
+    installPhase = ''
+      mkdir -p $out/lib
+      cp ${stdenv.cc.cc.lib}/lib/libstdc++.so.6 $out/lib/
+    '';
+  };
+
+  minimal-ssl = stdenv.mkDerivation {
+    name = "minimal-ssl";
+    phases = ["installPhase"];
+    installPhase = ''
+      mkdir -p $out/lib
+      cp ${openssl.out}/lib/libssl.so $out/lib/
+    '';
+  };
   # # Additional images can be downloaded with `docerTools.pullImage`
   # debian = dockerTools.pullImage {
   #   imageName = "debian";
   #   imageDigest = "sha256:b8084b1a576c5504a031936e1132574f4ce1d6cc7130bbcc25a28f074539ae6b";
   #   sha256 = "sha256-iCIQnlHMPmkjw4iDdwU5Da4udYjYl0tmUqj16za0xhU=";
   # };
-
-  # Creates a derivation of busybox with only `cat` and `du` accessible. This
-  # avoids bloating our docker image with unnecessary dependencies. We use
-  # busybox to shave of even more space with tiny implementation of these.
-  # `cat` is used to retrieve mounted secrets
-  # `du` is used to measure the size of the db
-  util = stdenv.mkDerivation {
-    name = "minimal-cat";
-    buildInputs = [busybox];
-    buildCommand = ''
-      mkdir -p $out/bin
-      cp ${busybox}/bin/cat $out/bin/
-      cp ${busybox}/bin/du $out/bin/
-    '';
-  };
-
-  runner = writeScriptBin "madara-runner" ''
-    #!${pkgs.stdenv.shell}
-    export RPC_API_KEY=$(cat $RPC_API_KEY_FILE)
-    export GATEWAY_KEY=$(cat $GATEWAY_KEY_FILE)
-
-    /bin/madara                  \
-      --name madara              \
-      --base-path /data/madara   \
-      --network test             \
-      --rpc-external             \
-      --rpc-cors all             \
-      --l1-endpoint $RPC_API_KEY \
-      --gateway-key $GATEWAY_KEY
-  '';
-
+in
   # Generates docker image using nix. This is equivalent to using `FROM scratch`.
   # https://ryantm.github.io/nixpkgs/builders/images/dockertools/
-  image = dockerTools.buildImage {
+  dockerTools.buildImage {
     name = "madara";
     tag = "latest";
 
-    # # Use `fromImage` to specify a base image. This image must already be
-    # # available locally, such as after using `dockerTools.pullImage`
+    # Use `fromImage` to specify a base image. This image must already be
+    # available locally, such as after using `dockerTools.pullImage`
     # fromImage = debian;
 
-    copyToRoot = buildEnv {
+    copyToRoot = pkgs.buildEnv {
       name = "madara";
       paths = [
-        madara
-        runner
-        util
-        # This is necessary to avoid 'unable to get local issuer certificate'
-        # https://discourse.nixos.org/t/adding-a-new-ca-certificate-to-included-bundle/14301/8
-        cacert
+        minimal-madara
+        minimal-cacert
+        minimal-stdcpp
+        minimal-ssl
       ];
-      pathsToLink = ["/bin"];
+      pathsToLink = ["/bin" "/etc" "/lib"];
+
+      postBuild = ''
+        mv $out/bin/madara $out/bin/madara.link
+        mv $out/lib/libssl.so $out/lib/libssl.so.link
+        mv $out/lib/libstdc++.so.6 $out/lib/libstdc++.so.6.link
+
+        cp -L $out/bin/madara.link $out/bin/madara
+        cp -L $out/lib/libssl.so.link $out/lib/libssl.so
+        cp -L $out/lib/libstdc++.so.6.link $out/lib/libstdc++.so.6
+
+        rm $out/bin/madara.link
+        rm $out/lib/libssl.so.link
+        rm $out/lib/libstdc++.so.6.link
+      '';
     };
 
     config = {
-      Cmd = ["/bin/madara-runner"];
-      Env = ["SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"];
+      EntryPoint = ["/bin/madara"];
+      Cmd = ["--help"];
+      Env = [
+        "SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
+      ];
     };
-  };
-  # Calling `nix-build` on this file will create an artifact in `/nix/store/`.
-  # Crucially, nix uses the default unix time as date of last modification. This
-  # poses an issue since it means Make will always flag this output as
-  # out-of-date.
-  #
-  # To avoid this, we create a script which copies the generated docker image to
-  # a given directory, updating its date to the current time. We cannot do this
-  # otherwise as only root has ownership of artifacts generated in `/nix/store/`.
-  #
-  # This way, we are able to guarantee that docker images will not be rebuilt by
-  # Make on each run, along with any other command associated to their generation
-  # such as `docker load -i`.
-in
-  writeScriptBin "copyto" ''
-    #!${pkgs.stdenv.shell}
-    cp ${image} $1
-    touch -m $1
-  ''
+  }
