@@ -4,7 +4,7 @@ import sqlalchemy
 import sqlmodel
 
 
-class MethodDb(int, Enum):
+class MethodDB(int, Enum):
     # Read API
     STARKNET_BLOCK_HASH_AND_NUMBER = 0
     STARKNET_BLOCK_NUMBER = 1
@@ -42,7 +42,7 @@ class NodeDB(int, Enum):
     PATHFINDER = 2
 
 
-class BlockInfo(sqlmodel.SQLModel, table=True):
+class BlockDB(sqlmodel.SQLModel, table=True):
     __table_args__ = (sqlalchemy.PrimaryKeyConstraint("id", "method_idx"),)
 
     id: int | None = sqlmodel.Field(
@@ -50,48 +50,36 @@ class BlockInfo(sqlmodel.SQLModel, table=True):
     )
     method_idx: int = sqlmodel.Field(primary_key=True)
     benchmark_id: int | None = sqlmodel.Field(
-        default=None, foreign_key="benchmark.id", ondelete="RESTRICT"
+        default=None, foreign_key="benchmarkdb.id", ondelete="RESTRICT"
     )
 
-    benchmarks: list["Benchmark"] = sqlmodel.Relationship(
+    benchmarks: list["BenchmarkDB"] = sqlmodel.Relationship(
         back_populates="block", passive_deletes="all"
     )
 
 
-class Benchmark(sqlmodel.SQLModel, table=True):
+class BenchmarkDB(sqlmodel.SQLModel, table=True):
     id: int | None = sqlmodel.Field(default=None, primary_key=True)
     node_idx: int = sqlmodel.Field(index=True)
     elapsed_avg: int
     elapsed_low: int
     elapsed_high: int
     input_id: int | None = sqlmodel.Field(
-        default=None, foreign_key="input.id", ondelete="CASCADE"
+        default=None, foreign_key="inputdb.id", ondelete="CASCADE"
     )
 
-    block: BlockInfo = sqlmodel.Relationship(
+    block: BlockDB = sqlmodel.Relationship(
         back_populates="benchmarks", passive_deletes="all"
     )
-    input: "Input" = sqlmodel.Relationship(
+    input: "InputDB" = sqlmodel.Relationship(
         back_populates="benchmark", passive_deletes="all"
     )
 
 
-class Input(sqlmodel.SQLModel, table=True):
+class InputDB(sqlmodel.SQLModel, table=True):
     id: int | None = sqlmodel.Field(default=None, primary_key=True)
     input: str
 
-    benchmark: Benchmark = sqlmodel.Relationship(
+    benchmark: BenchmarkDB = sqlmodel.Relationship(
         back_populates="input", passive_deletes="all"
     )
-
-
-class MessageBase(sqlmodel.SQLModel):
-    message: str = sqlmodel.Field(index=True)
-
-
-class MessageDb(MessageBase, table=True):
-    id: int | None = sqlmodel.Field(None, primary_key=True)
-
-
-class MessageInOut(MessageBase):
-    message: str
