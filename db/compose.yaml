@@ -1,11 +1,19 @@
-name: timescaledb
+name: postgresql
 
 services:
   timescaledb:
-    image: timescale/timescaledb-ha:pg16
-    container_name: "timescaledb"
+    image: postgres:17.0
+    container_name: "posgresql"
+    shm_size: 128m
     ports:
-      - "127.0.0.1:5432:5432"
-    env_file: ./db.env
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
     volumes:
-      - ./data:/var/lib/postgresql/data
+      - ./db/data:/var/lib/postgresql/data
+
+secrets:
+  db_password:
+    file: ../secrets/db_password.secret

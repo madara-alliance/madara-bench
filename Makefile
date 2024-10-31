@@ -7,10 +7,11 @@ IMGS     := $(addsuffix /image.tar.gz,$(NODES))
 VOLUMES  := $(addsuffix _runner_db,$(NODES))
 SECRETS  := secrets/rpc_api.secret     \
             secrets/rpc_api_ws.secret  \
-            secrets/gateway_key.secret
+            secrets/gateway_key.secret \
+	    secrets/db_password.secret
 
 DEPS     := poetry install
-RUNNER   := poetry run fastapi dev --host 0.0.0.0 app
+RUNNER   := poetry run fastapi run app
 
 define HELP
 Starknet Node Benchmark Runner
@@ -36,7 +37,9 @@ Targets:
   - start-madara       Start the Madara node
   - start-juno         Start the Juno node
   - start-pathfinder   Start the Pathfinder node
-  - start              Start all nodes
+  - start-db           Start postgresql local db at ./db/data
+  - start-service      Start api service at 0.0.0.0:8000/docs
+  - start              Start all nodes and api service
 
   [ STOPPING NODES ]
 
@@ -46,6 +49,7 @@ Targets:
   - stop-madara        Stop the Madara node
   - stop-juno          Stop the Juno node
   - stop-pathfinder    Stop the Pathfinder node
+  - stop-db            Stop postgresql local db at ./db/data
   - stop               Stop all nodes
 
   [ RESTARTING NODES ]
@@ -83,18 +87,18 @@ Targets:
   care as reseting node volumes will force a resync from genesys.
 
   - clean              Stop containers and prune images
-  - clean-db           Perform clean and remove local volumes
+  - clean-db           Perform clean and remove local volumes and database
   - fclean             Perform clean-db and remove local images
 
   [ OTHER COMMANDS ]
 
-  - help             Show this help message
+  - help               Show this help message
 
 endef
 export HELP
 
 # dim white italic
-TERTIARY := \033[2;3;37m
+DIM := \033[2;3;37m
 
 # bold cyan
 INFO     := \033[1;36m
@@ -114,69 +118,76 @@ all: help
 help:
 	@echo "$$HELP"
 
+.PHONY: start-db
+start-db:
+	@echo -e "$(DIM)starting$(RESET) $(PASS)database$(RESET)"
+	@docker compose -f db/compose.yaml up -d
+
 .PHONY: start-madara
 start-madara: images $(SECRETS)
-	@echo -e "$(TERTIARY)running$(RESET) $(PASS)madara$(RESET)"
+	@echo -e "$(DIM)running$(RESET) $(PASS)madara$(RESET)"
 	@docker-compose -f madara/compose.yaml up -d
-	@$(DEPS)
-	@$(RUNNER)
 
 .PHONY: start-juno
 start-juno: images $(SECRETS)
-	@echo -e "$(TERTIARY)running$(RESET) $(PASS)juno$(RESET)"
+	@echo -e "$(DIM)running$(RESET) $(PASS)juno$(RESET)"
 	@docker-compose -f juno/compose.yaml up -d
-	@$(DEPS)
-	@$(RUNNER)
 
 .PHONY: start-pathfinder
 start-pathfinder: images $(SECRETS)
-	@echo -e "$(TERTIARY)running$(RESET) $(PASS)pathfinder$(RESET)"
+	@echo -e "$(DIM)running$(RESET) $(PASS)pathfinder$(RESET)"
 	@docker-compose -f pathfinder/compose.yaml up -d
+
+.PHONY: start-service
+start-service: start-db
 	@$(DEPS)
 	@$(RUNNER)
 
 .PHONY: start
-start: images $(SECRETS)
-	@for node in $(NODES); do \
-		echo -e "$(TERTIARY)running$(RESET) $(PASS)$$node$(RESET)"; \
-		docker-compose -f $$node/compose.yaml up -d; \
-	done
-	@echo -e "$(PASS)all services set up$(RESET)"
+start: start-db
+	@make --silent start-madara start-juno start-pathfinder
+	@echo -e "$(PASS)all services are up$(RESET)"
 	@$(DEPS)
 	@$(RUNNER)
 
+.PHONY: stop-db
+stop-db:
+	@echo -e "$(DIM)stopping$(RESET) $(WARN)database$(RESET)"
+	@docker compose -f db/compose.yaml stop
+
 .PHONY: stop-madara
 stop-madara:
-	@echo -e "$(TERTIARY)stopping $(WARN)madara$(RESET)"
+	@echo -e "$(DIM)stopping$(RESET) $(WARN)madara$(RESET)"
 	@docker-compose -f madara/compose.yaml stop
 
 .PHONY: stop-juno
 stop-juno:
-	@echo -e "$(TERTIARY)stopping $(WARN)juno$(RESET)"
+	@echo -e "$(DIM)stopping$(RESET) $(WARN)juno$(RESET)"
 	@docker-compose -f juno/compose.yaml stop
 
 .PHONY: stop-pathfinder
 stop-pathfinder:
-	@echo -e "$(TERTIARY)stopping $(WARN)pathfinder$(RESET)"
+	@echo -e "$(DIM)stopping$(RESET) $(WARN)pathfinder$(RESET)"
 	@docker-compose -f pathfinder/compose.yaml stop
 
 .PHONY: stop
 stop: stop-madara stop-juno stop-pathfinder
+	@make --silent stop-db
 	@echo -e "$(WARN)all services stopped$(RESET)"
 
 .PHONY: logs-madara
 logs-madara:
-	@echo -e "$(TERTIARY)logs for $(INFO)madara$(RESET)";
+	@echo -e "$(DIM)logs for$(RESET) $(INFO)madara$(RESET)";
 	@docker-compose -f madara/compose.yaml logs -f -n 100;
 
 .PHONY: logs-juno
 logs-juno:
-	@echo -e "$(TERTIARY)logs for $(INFO)juno$(RESET)";
+	@echo -e "$(DIM)logs for$(RESET) $(INFO)juno$(RESET)";
 	@docker-compose -f juno/compose.yaml logs -f -n 100;
 
 .PHONY: logs-pathfinder
 logs-pathfinder:
-	@echo -e "$(TERTIARY)logs for $(INFO)pathfinder$(RESET)";
+	@echo -e "$(DIM)logs for$(RESET) $(INFO)pathfinder$(RESET)";
 	@docker-compose -f pathfinder/compose.yaml logs -f -n 100;
 
 .PHONY: images
@@ -184,22 +195,32 @@ images: $(IMGS)
 
 .PHONY: clean
 clean: stop
-	@echo -e "$(TERTIARY)pruning containers$(RESET)"
+	@echo -e "$(DIM)pruning containers$(RESET)"
 	@docker container prune -f
-	@echo -e "$(TERTIARY)pruning images$(RESET)"
+	@echo -e "$(DIM)pruning images$(RESET)"
 	@docker image prune -f
 	@echo -e "$(WARN)images cleaned$(RESET)"
 
 .PHONY: clean-db
-clean-db: clean
-	@echo -e "$(TERTIARY)removing local database volumes$(RESET)"
+clean-db:
+	@echo -e "$(WARN)This action will result in irrecoverable loss of data!$(RESET)"
+	@echo -e "$(DIM)Are you sure you want to proceed?$(RESET) $(PASS)[y/N] $(RESET)" && \
+	read ans && \
+	case "$$ans" in \
+		[yY]*) true;; \
+		*) false;; \
+	esac
+	@make --silent clean
+	@echo -e "$(DIM)removing node database volumes$(RESET)"
 	@for volume in $(VOLUMES); do  \
 		docker volume rm -f $$volume; \
 	done
+	@echo -e "$(DIM)removing benchmark database$(RESET)"
+	@sudo rm -rf ./db/data
 
 .PHONY: fclean
 fclean: clean-db
-	@echo -e "$(TERTIARY)removing local images tar.gz$(RESET)"
+	@echo -e "$(DIM)removing local images tar.gz$(RESET)"
 	@rm -rf $(IMGS)
 	@echo -e "$(WARN)artefacts cleaned$(RESET)"
 
@@ -215,6 +236,10 @@ restart-juno: clean
 restart-pathfinder: clean
 	@make --silent start-pathfinder
 
+.PHONY: restart-db
+restart-db: clean
+	@make --silent start-db
+
 .PHONY: restart
 restart: clean
 	@make --silent start
@@ -226,7 +251,7 @@ frestart: fclean
 .SECONDEXPANSION:
 %image.tar.gz: node = $(@D)
 %image.tar.gz: %Dockerfile %$$(node)-runner.sh
-	@echo -e "$(TERTIARY)building$(RESET) $(PASS)$(node)$(RESET)"
+	@echo -e "$(DIM)building$(RESET) $(PASS)$(node)$(RESET)"
 	@docker image rm -f $(node):latest || true
 	@docker build -t $(node):latest $(node)
 	@docker image save -o $(node)/image.tar.gz $(node):latest

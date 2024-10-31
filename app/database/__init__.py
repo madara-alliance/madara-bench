@@ -2,21 +2,10 @@ from typing import Any, Generator
 
 import sqlmodel
 
+from . import models
 
-class MessageBase(sqlmodel.SQLModel):
-    message: str = sqlmodel.Field(index=True)
-
-
-class MessageDb(MessageBase, table=True):
-    id: int | None = sqlmodel.Field(None, primary_key=True)
-
-
-class MessageInOut(MessageBase):
-    message: str
-
-
-timescale_url = "postgresql://postgres:password@localhost/postgres"
-engine = sqlmodel.create_engine(timescale_url)
+postgres_url = "postgresql://postgres:password@localhost:5432/postgres"
+engine = sqlmodel.create_engine(postgres_url, echo=True)
 
 
 def init_db_and_tables():

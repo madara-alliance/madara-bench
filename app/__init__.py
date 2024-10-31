@@ -731,9 +731,9 @@ async def docker_get_ports(node: models.NodeName):
 
 @app.post("/info/db/add_message", tags=[Tags.DEBUG])
 async def db_message_add(
-    message: database.MessageInOut, session: deps.Session
-) -> database.MessageDb:
-    message_db = database.MessageDb.model_validate(message)
+    message: database.models.MessageInOut, session: deps.Session
+) -> database.models.MessageDb:
+    message_db = database.models.MessageDb.model_validate(message)
     session.add(message_db)
     session.commit()
     session.refresh(message_db)
@@ -742,16 +742,17 @@ async def db_message_add(
 
 @app.get(
     "/info/db/get_message",
-    response_model=database.MessageInOut,
+    response_model=database.models.MessageInOut,
     tags=[Tags.DEBUG],
 )
 async def db_message_get(
     message_id: int, session: deps.Session
-) -> database.MessageDb:
-    message = session.get(database.MessageDb, message_id)
+) -> database.models.MessageDb:
+    message = session.get(database.models.MessageDb, message_id)
     if not message:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_404_NOT_FOUND,
             detail="message not found",
         )
-    return message
+    else:
+        return message
