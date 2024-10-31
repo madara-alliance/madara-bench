@@ -229,6 +229,8 @@ async def benchmark_rpc(
     when = [min([resp.when for resp in resps]) for resps in results]
     elapsed = [[resp.elapsed for resp in resps] for resps in results]
     elapsed_avg = [sum(all) // len(all) for all in elapsed]
+    elapsed_low = [min(all) for all in elapsed]
+    elapsed_high = [max(all) for all in elapsed]
 
     # if diff == True:
     #     source = next(
@@ -271,9 +273,25 @@ async def benchmark_rpc(
             block_number=block_number,
             syncing=syncing,
             elapsed_avg=elapsed_avg,
+            elapsed_low=elapsed_low,
+            elapsed_high=elapsed_high,
         )
-        for node, when, block_number, syncing, elapsed_avg in zip(
-            node, when, block_nos, sync_status, elapsed_avg
+        for (
+            node,
+            when,
+            block_number,
+            syncing,
+            elapsed_avg,
+            elapsed_low,
+            elapsed_high,
+        ) in zip(
+            node,
+            when,
+            block_nos,
+            sync_status,
+            elapsed_avg,
+            elapsed_low,
+            elapsed_high,
         )
     ]
 

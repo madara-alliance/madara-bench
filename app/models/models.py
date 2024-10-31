@@ -195,6 +195,22 @@ class NodeResponseBenchRpc(pydantic.BaseModel):
             )
         ),
     ]
+    elapsed_low: Annotated[
+        int,
+        pydantic.Field(
+            description=(
+                "Lowest method latency over all samples, in nanoseconds"
+            )
+        ),
+    ]
+    elapsed_high: Annotated[
+        int,
+        pydantic.Field(
+            description=(
+                "Highest method latency over all samples, in nanoseconds"
+            )
+        ),
+    ]
 
 
 class ResponseModelBenchRpc(pydantic.BaseModel):

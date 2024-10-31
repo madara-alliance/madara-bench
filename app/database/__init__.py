@@ -15,59 +15,107 @@ engine = sqlmodel.create_engine(postgres_url, echo=True)
 logger = logging.get_logger()
 
 
+async def db_bench_method(
+    s: sqlmodel.Session,
+    node_rpc: models_app.NodeName,
+    node_db: models_db.NodeDB,
+    node_url: str,
+    method_rpc: models_app.models.RpcCallBench,
+    method_db: models_db.RpcCallDB,
+    samples: int,
+    interval: int,
+):
+    logger.info(f"Bench - {node_rpc.value}: {method_rpc.value}")
+    bench = await benchmarks.benchmark_rpc(
+        urls={node_rpc: node_url},
+        rpc_call=method_rpc,
+        samples=samples,
+        interval=interval,
+    )
+    logger.info("Bench - DONE")
+
+    # This is safe as we are only benchmarking a single node
+    node_results = bench.nodes[0]
+
+    logger.info("DB data - CREATING")
+    block = models_db.BlockDB(
+        block_id=node_results.block_number,
+        method_idx=method_db,
+    )
+
+    input = models_db.InputDB(input=json.dumps(bench.inputs))
+
+    benchmark = models_db.BenchmarkDB(
+        node_idx=node_db,
+        elapsed_avg=node_results.elapsed_avg,
+        elapsed_low=node_results.elapsed_low,
+        elapsed_high=node_results.elapsed_high,
+        block=block,
+        input=input,
+    )
+    logger.info("DB data - DONE")
+
+    logger.info("Session - ADD")
+    s.add(benchmark)
+    logger.info("Session - COMMIT")
+    s.commit()
+    logger.info("Session - UPDATED")
+
+
 async def db_bench_routine():
-    logger.info("Node info - INIT")
     node_info_madara = deps.deps_container(models_app.NodeName.MADARA)
     node_info_juno = deps.deps_container(models_app.NodeName.JUNO)
     node_info_pathfinder = deps.deps_container(models_app.NodeName.PATHFINDER)
-    logger.info("Node info - DONE")
 
-    logger.info("Node url - INIT")
     url_madara = rpc.rpc_url(node_info_madara.node, node_info_madara.info)
     url_juno = rpc.rpc_url(node_info_juno.node, node_info_juno.info)
     url_pathfinder = rpc.rpc_url(
         node_info_pathfinder.node, node_info_pathfinder.info
     )
-    logger.info("Node url - DONE")
 
-    logger.info("Session - ACQUIRING")
-    s = next(session())
-    logger.info("Session - DONE")
+    methods = [
+        (
+            models_app.RpcCallBench.STARKNET_SPEC_VERSION,
+            models_db.RpcCallDB.STARKNET_SPEC_VERSION,
+            10,  # samples
+            100,  # interval
+        )
+    ]
 
     while True:
-        logger.info("Bench - START")
-        bench = await benchmarks.benchmark_rpc(
-            urls={models_app.NodeName.MADARA: url_madara},
-            rpc_call=models_app.RpcCallBench.STARKNET_SPEC_VERSION,
-            samples=10,
-            interval=100,
-        )
-        logger.info("Bench - DONE")
-
-        node_results = bench.nodes[0]
-
-        logger.info("DB data - CREATING")
-        block = models_db.BlockDB(
-            method_idx=models_db.MethodDB.STARKNET_SPEC_VERSION
-        )
-
-        input = models_db.InputDB(input=json.dumps(bench.inputs))
-
-        benchmark = models_db.BenchmarkDB(
-            node_idx=models_db.NodeDB.MADARA,
-            elapsed_avg=node_results.elapsed_avg,
-            elapsed_low=node_results.elapsed_avg,
-            elapsed_high=node_results.elapsed_avg,
-            block=block,
-            input=input,
-        )
-        logger.info("DB data - DONE")
-
-        logger.info("Session - ADD")
-        s.add(benchmark)
-        logger.info("Session - COMMIT")
-        s.commit()
-        logger.info("Session - UPDATED")
+        for method_rpc, method_db, samples, interval in methods:
+            await asyncio.gather(
+                db_bench_method(
+                    s=next(session()),
+                    node_rpc=models_app.NodeName.MADARA,
+                    node_db=models_db.NodeDB.MADARA,
+                    node_url=url_madara,
+                    method_rpc=method_rpc,
+                    method_db=method_db,
+                    samples=samples,
+                    interval=interval,
+                ),
+                db_bench_method(
+                    s=next(session()),
+                    node_rpc=models_app.NodeName.JUNO,
+                    node_db=models_db.NodeDB.JUNO,
+                    node_url=url_juno,
+                    method_rpc=method_rpc,
+                    method_db=method_db,
+                    samples=samples,
+                    interval=interval,
+                ),
+                db_bench_method(
+                    s=next(session()),
+                    node_rpc=models_app.NodeName.PATHFINDER,
+                    node_db=models_db.NodeDB.PATHFINDER,
+                    node_url=url_pathfinder,
+                    method_rpc=method_rpc,
+                    method_db=method_db,
+                    samples=samples,
+                    interval=interval,
+                ),
+            )
 
         logger.info("Bench - WAIT")
         await asyncio.sleep(10)

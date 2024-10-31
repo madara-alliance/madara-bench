@@ -4,7 +4,7 @@ import sqlalchemy
 import sqlmodel
 
 
-class MethodDB(int, Enum):
+class RpcCallDB(int, Enum):
     # Read API
     STARKNET_BLOCK_HASH_AND_NUMBER = 0
     STARKNET_BLOCK_NUMBER = 1
@@ -43,11 +43,11 @@ class NodeDB(int, Enum):
 
 
 class BlockDB(sqlmodel.SQLModel, table=True):
-    __table_args__ = (sqlalchemy.PrimaryKeyConstraint("id", "method_idx"),)
-
-    id: int | None = sqlmodel.Field(
-        default=None, primary_key=True, sa_column_kwargs={"autoincrement": True}
+    __table_args__ = (
+        sqlalchemy.PrimaryKeyConstraint("block_id", "method_idx"),
     )
+
+    block_id: int = sqlmodel.Field(primary_key=True)
     method_idx: int = sqlmodel.Field(primary_key=True)
     benchmark_id: int | None = sqlmodel.Field(
         default=None, foreign_key="benchmarkdb.id", ondelete="RESTRICT"
