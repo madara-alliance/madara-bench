@@ -246,6 +246,15 @@ async def gen_starknet_estimateFee(
 
     while True:
         block_number = await latest_common_block_number(urls)
+        block_min = max(0, block_number - GENERATE_RANGE)
+        block_common = await client.get_block(block_number=block_min)
+
+        error.ensure_meet_version_requirements(
+            models.RpcCall.STARKNET_ESTIMATE_FEE,
+            block_common.starknet_version,
+            error.StarknetVersion.V0_13_1_1,
+        )
+
         block_number = random.randrange(
             max(block_number - GENERATE_RANGE, 0), block_number
         )
@@ -291,8 +300,17 @@ async def gen_starknet_estimate_message_fee(
 
     while True:
         block_number = await latest_common_block_number(urls)
+        block_min = max(0, block_number - GENERATE_RANGE)
+        block_common = await client.get_block(block_number=block_min)
+
+        error.ensure_meet_version_requirements(
+            models.RpcCall.STARKNET_ESTIMATE_FEE,
+            block_common.starknet_version,
+            error.StarknetVersion.V0_13_1_1,
+        )
+
         block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
+            max(0, block_number - GENERATE_RANGE), block_number
         )
         block = await client.get_block(block_number=block_number)
         txs = block.transactions
@@ -314,7 +332,7 @@ async def gen_starknet_estimate_message_fee(
 
             if block_number < 0:
                 raise error.ErrorNoInputFound(
-                    models.RpcCallBench.STARKNET_ESTIMATE_FEE
+                    models.RpcCallBench.STARKNET_ESTIMATE_MESSAGE_FEE
                 )
 
             block = await client.get_block(block_number=block_number)
@@ -360,7 +378,7 @@ async def gen_starknet_getEvents(
 
             if block_number < 0:
                 raise error.ErrorNoInputFound(
-                    models.RpcCallBench.STARKNET_ESTIMATE_FEE
+                    models.RpcCallBench.STARKNET_GET_EVENTS
                 )
 
             block_with_receits = await client.get_block_with_receipts(
@@ -462,7 +480,7 @@ async def gen_starknet_simulateTransactions(
 
             if block_number < 0:
                 raise error.ErrorNoInputFound(
-                    models.RpcCallBench.STARKNET_ESTIMATE_FEE
+                    models.RpcCallBench.STARKNET_SIMULATE_TRANSACTIONS
                 )
 
             block = await client.get_block(block_number=block_number)
