@@ -1,4 +1,3 @@
-import datetime
 import time
 import typing
 from typing import Any, Coroutine, TypeVar
@@ -51,7 +50,6 @@ def json_rpc(
     headers = {"content-type": "application/json"}
     data = {"id": 1, "jsonrpc": "2.0", "method": method, "params": params}
 
-    time_start = datetime.datetime.now()
     perf_start = time.perf_counter_ns()
     response = requests.post(url=url, json=data, headers=headers)
     perf_stop = time.perf_counter_ns()
@@ -62,7 +60,6 @@ def json_rpc(
     return models.ResponseModelJSON(
         node=node,
         method=method,
-        when=time_start,
         elapsed=perf_delta,
         output=output,
     )
@@ -73,7 +70,6 @@ async def json_rpc_starknet_py(
     method: models.RpcCall,
     caller: Coroutine[Any, Any, T],
 ) -> models.ResponseModelJSON:
-    time_start = datetime.datetime.now()
     perf_start = time.perf_counter_ns()
 
     try:
@@ -87,7 +83,6 @@ async def json_rpc_starknet_py(
     return models.ResponseModelJSON(
         node=node,
         method=method,
-        when=time_start,
         elapsed=perf_delta,
         output=output,
     )

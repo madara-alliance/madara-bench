@@ -5,7 +5,7 @@ from typing import Annotated, Any, Generator
 import fastapi
 import sqlmodel
 
-from app import benchmarks, deps, logging, rpc
+from app import benchmarks, deps, error, logging, rpc
 from app import models as models_app
 
 from . import models
@@ -28,14 +28,45 @@ async def db_bench_routine():
 
     methods = [
         (
-            models_app.RpcCallBench.STARKNET_SPEC_VERSION,
-            models.RpcCallDB.STARKNET_SPEC_VERSION,
+            models_app.RpcCallBench.STARKNET_BLOCK_HASH_AND_NUMBER,
+            models.RpcCallDB.STARKNET_BLOCK_HASH_AND_NUMBER,
             10,  # samples
             100,  # interval
-        )
+        ),
+        (
+            models_app.RpcCallBench.STARKNET_BLOCK_NUMBER,
+            models.RpcCallDB.STARKNET_BLOCK_NUMBER,
+            10,
+            100,
+        ),
+        (
+            models_app.RpcCallBench.STARKNET_CHAIN_ID,
+            models.RpcCallDB.STARKNET_CHAIN_ID,
+            10,
+            100,
+        ),
+        (
+            models_app.RpcCallBench.STARKNET_ESTIMATE_FEE,
+            models.RpcCallDB.STARKNET_ESTIMATE_FEE,
+            10,
+            250,
+        ),
+        (
+            models_app.RpcCallBench.STARKNET_ESTIMATE_MESSAGE_FEE,
+            models.RpcCallDB.STARKNET_ESTIMATE_MESSAGE_FEE,
+            10,
+            250,
+        ),
+        (
+            models_app.RpcCallBench.STARKNET_SPEC_VERSION,
+            models.RpcCallDB.STARKNET_SPEC_VERSION,
+            10,
+            100,
+        ),
     ]
 
     while True:
+        logger.info("STARTING SESSION")
         for method_rpc, method_db, samples, interval in methods:
             await asyncio.gather(
                 db_bench_method(
@@ -69,10 +100,7 @@ async def db_bench_routine():
                     interval=interval,
                 ),
             )
-
-        logger.info("Bench - WAIT")
-        await asyncio.sleep(10)
-        logger.info("Bench - NEXT")
+        logger.info("SESSION END")
 
 
 async def db_bench_method(
@@ -85,13 +113,24 @@ async def db_bench_method(
     samples: int,
     interval: int,
 ):
-    logger.info(f"Benchmarking - {node_rpc.value}: {method_rpc.value}")
-    bench = await benchmarks.benchmark_rpc(
-        urls={node_rpc: node_url},
-        rpc_call=method_rpc,
-        samples=samples,
-        interval=interval,
-    )
+    logger_common = f"Benchmarking - {node_rpc.value}: {method_rpc.value}"
+    logger.info(logger_common)
+    try:
+        bench = await benchmarks.benchmark_rpc(
+            urls={node_rpc: node_url},
+            rpc_call=method_rpc,
+            samples=samples,
+            interval=interval,
+        )
+    except error.ErrorNoInputFound:
+        logger.info(f"{logger_common} - NO INPUT FOUND")
+        return
+    except error.ErrorStarknetVersion:
+        logger.info(f"{logger_common} - INVALID STARKNET VERSION")
+        return
+    except error.ErrorRpcCall:
+        logger.info(f"{logger_common} - RPC CALL FAILURE")
+        return
 
     # This is safe as we are only benchmarking a single node
     node_results = bench.nodes[0]
@@ -114,7 +153,7 @@ async def db_bench_method(
 
     s.add(benchmark)
     s.commit()
-    logger.info(f"Benchmarking - {node_rpc.value}: {method_rpc.value} - DONE")
+    logger.info(f"{logger_common} - DONE")
 
 
 def init_db_and_tables():
