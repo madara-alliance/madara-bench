@@ -91,11 +91,11 @@ class Tags(str, Enum):
 @asynccontextmanager
 async def lifespan(_: fastapi.FastAPI):
     database.init_db_and_tables()
-    fut = asyncio.create_task(database.db_bench_routine())
+    task = asyncio.create_task(database.db_bench_routine())
 
     yield
 
-    fut.cancel()
+    task.cancel()
 
 
 # =========================================================================== #

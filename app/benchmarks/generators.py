@@ -441,6 +441,14 @@ async def gen_starknet_simulateTransactions(
     while True:
         block_number = await latest_common_block_number(urls)
         block_min = max(0, block_number - GENERATE_RANGE)
+        block_common = await client.get_block(block_number=block_min)
+
+        error.ensure_meet_version_requirements(
+            models.RpcCall.STARKNET_ESTIMATE_FEE,
+            block_common.starknet_version,
+            error.StarknetVersion.V0_13_1_1,
+        )
+
         block_number = random.randrange(block_min, block_number)
         block = await client.get_block(block_number=block_number)
         txs = block.transactions

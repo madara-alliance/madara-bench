@@ -12,7 +12,7 @@ from app import models as models_app
 from . import models
 
 postgres_url = "postgresql://postgres:password@localhost:5432/postgres"
-engine = sqlmodel.create_engine(postgres_url, echo=True)
+engine = sqlmodel.create_engine(postgres_url)
 logger = logging.get_logger()
 
 
@@ -26,6 +26,7 @@ async def db_bench_routine():
     url_pathfinder = rpc.rpc_url(node_info_pathfinder.node, node_info_pathfinder.info)
 
     methods = [
+        # Read API
         (
             models_app.RpcCallBench.STARKNET_BLOCK_HASH_AND_NUMBER,
             models.RpcCallDB.STARKNET_BLOCK_HASH_AND_NUMBER,
@@ -158,6 +159,25 @@ async def db_bench_routine():
             10,
             100,
         ),
+        # Trace API
+        (
+            models_app.RpcCallBench.STARKNET_SIMULATE_TRANSACTIONS,
+            models.RpcCallDB.STARKNET_SIMULATE_TRANSACTIONS,
+            10,
+            250,
+        ),
+        (
+            models_app.RpcCallBench.STARKNET_TRACE_BLOCK_TRANSACTIONS,
+            models.RpcCallDB.STARKNET_TRACE_BLOCK_TRANSACTIONS,
+            10,
+            250,
+        ),
+        (
+            models_app.RpcCallBench.STARKNET_TRACE_TRANSACTION,
+            models.RpcCallDB.STARKNET_TRACE_TRANSACTION,
+            10,
+            250,
+        ),
     ]
 
     while True:
@@ -230,7 +250,22 @@ async def db_bench_method(
         logger.info(f"{logger_common} - VALIDATION ERROR")
         return
     except:
-        logger.info(f"{logger_common} - UNEXPECTED ERROR")
+        latest = s.exec(
+            sqlmodel.select(models.BlockDB)
+            .join(models.BenchmarkDB)
+            .where(models.BenchmarkDB.node_idx == node_db)
+            .order_by(sqlmodel.desc(models.BlockDB.id))
+            .limit(1)
+        ).first()
+
+        if latest:
+            latest = latest.id
+        else:
+            latest = 0
+
+        logger.info(
+            f"{logger_common} - UNEXPECTED ERROR: {node_rpc.value} {method_rpc.value} {latest}"
+        )
         return
 
     # This is safe as we are only benchmarking a single node
