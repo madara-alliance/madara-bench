@@ -6,6 +6,7 @@ from typing import Any
 import docker
 import fastapi
 import requests
+import sqlmodel
 from docker import errors as docker_errors
 from starknet_py.net.client_errors import ClientError
 from starknet_py.net.client_models import (
@@ -167,25 +168,46 @@ async def benchmark_system(
     tags=[Tags.BENCH],
 )
 async def benchmark_rpc(
-    rpc_call: models.RpcCallBench,
-    samples: models.query.TestSamples = 10,
-    interval: models.query.TestInterval = 100,
-    # diff: models.query.DiffEnable = False,
-    # diff_source: models.query.DiffSource = models.models.NodeName.MADARA,
-) -> models.ResponseModelBenchRpc:
-    containers = [
-        (node, system.container_get(node)) for node in models.NodeName
-    ]
-    urls = {
-        node: rpc.rpc_url(node, container) for (node, container) in containers
-    }
+    method: models.models.RpcCallBench,
+    node: models.models.NodeName,
+    block_start: models.query.BlockRange,
+    block_end: models.query.BlockRange,
+    session: database.Session,
+    limit: models.query.RangeLimit = None,
+) -> list[models.models.NodeResponseBenchRpc]:
+    def or_latest(n: int | models.query.Latest, latest: int) -> int:
+        if n == "latest":
+            return latest
+        else:
+            return n
 
-    return await benchmarks.benchmark_rpc(
-        urls,
-        rpc_call,
-        samples,
-        interval,
-    )
+    latest = session.exec(
+        sqlmodel.select(database.models.BlockDB)
+        .order_by(sqlmodel.desc(database.models.BlockDB.id))
+        .limit(1)
+    ).first()
+
+    if latest:
+        latest = latest.id
+    else:
+        latest = 0
+
+    block_start = or_latest(block_start, latest)
+    block_end = or_latest(block_end, latest)
+
+    method_idx = database.models.RpcCallDB.from_model_bench(method)
+    node_idx = database.models.NodeDB.from_model_bench(node)
+    blocks = session.exec(
+        sqlmodel.select(database.models.BlockDB)
+        .join(database.models.BenchmarkDB)
+        .where(database.models.BlockDB.id >= block_start)
+        .where(database.models.BlockDB.id <= block_end)
+        .where(database.models.BlockDB.method_idx == method_idx)
+        .where(database.models.BenchmarkDB.node_idx == node_idx)
+        .limit(limit)
+    ).all()
+
+    return [resp for block in blocks for resp in block.node_response()]
 
 
 # =========================================================================== #

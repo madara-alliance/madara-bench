@@ -1,6 +1,6 @@
 import datetime
 from enum import Enum
-from typing import Annotated, Any, Generic, TypeVar
+from typing import Annotated, Any, Generic, TypeVar, Union
 
 import pydantic
 
@@ -92,6 +92,62 @@ class RpcCallBench(str, Enum):
     STARKNET_TRACE_BLOCK_TRANSACTIONS = "starknet_traceBlockTransactions"
     STARKNET_TRACE_TRANSACTION = "starknet_traceTransaction"
 
+    @staticmethod
+    def from_scalar_idx(idx: int) -> Union["RpcCallBench", None]:
+        match idx:
+            case 0:
+                return RpcCallBench.STARKNET_BLOCK_HASH_AND_NUMBER
+            case 1:
+                return RpcCallBench.STARKNET_BLOCK_NUMBER
+            case 2:
+                return RpcCallBench.STARKNET_CHAIN_ID
+            case 3:
+                return RpcCallBench.STARKNET_ESTIMATE_FEE
+            case 4:
+                return RpcCallBench.STARKNET_ESTIMATE_MESSAGE_FEE
+            case 5:
+                return RpcCallBench.STARKNET_GET_BLOCK_TRANSACTION_COUNT
+            case 6:
+                return RpcCallBench.STARKNET_GET_BLOCK_WITH_RECEIPTS
+            case 7:
+                return RpcCallBench.STARKNET_GET_BLOCK_WITH_TX_HASHES
+            case 8:
+                return RpcCallBench.STARKNET_GET_BLOCK_WITH_TXS
+            case 9:
+                return RpcCallBench.STARKNET_GET_CLASS
+            case 10:
+                return RpcCallBench.STARKNET_GET_CLASS_AT
+            case 11:
+                return RpcCallBench.STARKNET_GET_CLASS_HASH_AT
+            case 12:
+                return RpcCallBench.STARKNET_GET_EVENTS
+            case 13:
+                return RpcCallBench.STARKNET_GET_NONCE
+            case 14:
+                return RpcCallBench.STARKNET_GET_STATE_UPDATE
+            case 15:
+                return RpcCallBench.STARKNET_GET_STORAGE_AT
+            case 16:
+                return (
+                    RpcCallBench.STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX
+                )
+            case 17:
+                return RpcCallBench.STARKNET_GET_TRANSACTION_BY_HASH
+            case 18:
+                return RpcCallBench.STARKNET_GET_TRANSACTION_RECEIPT
+            case 19:
+                return RpcCallBench.STARKNET_GET_TRANSACTION_STATUS
+            case 20:
+                return RpcCallBench.STARKNET_SPEC_VERSION
+            case 21:
+                return RpcCallBench.STARKNET_SYNCING
+            case 22:
+                return RpcCallBench.STARKNET_SIMULATE_TRANSACTIONS
+            case 23:
+                return RpcCallBench.STARKNET_TRACE_BLOCK_TRANSACTIONS
+            case 24:
+                return RpcCallBench.STARKNET_TRACE_TRANSACTION
+
 
 class SystemMetric(str, Enum):
     CPU = "cpu"
@@ -106,6 +162,16 @@ class NodeName(str, Enum):
     MADARA = "madara"
     JUNO = "juno"
     PATHFINDER = "pathfinder"
+
+    @staticmethod
+    def from_scalar_idx(idx: int) -> Union["NodeName", None]:
+        match idx:
+            case 0:
+                return NodeName.MADARA
+            case 1:
+                return NodeName.JUNO
+            case 2:
+                return NodeName.PATHFINDER
 
 
 class CpuResultFormat(str, Enum):
@@ -160,32 +226,17 @@ class ResponseModelSystem(pydantic.BaseModel, Generic[T]):
 class NodeResponseBenchRpc(pydantic.BaseModel):
     """Holds benchmarking indetifying data and average response time. This is
     used to store the results of several tests, averaged over multiple samples
-
-    `time_start` is kept as a way to sort measurements or discriminate test if
-    the starting time between tests is too large. This could be the case in the
-    event of high load
     """
 
-    node: NodeName
+    node: Annotated[
+        str, pydantic.Field(description="Node on which the test was run")
+    ]
     method: Annotated[
         str, pydantic.Field(description="JSON RPC method being tested")
-    ]
-    when: Annotated[
-        datetime.datetime,
-        pydantic.Field(description="Test start time"),
     ]
     block_number: Annotated[
         int,
         pydantic.Field(description="Block number at the start of the tests"),
-    ]
-    syncing: Annotated[
-        bool,
-        pydantic.Field(
-            description=(
-                "Node synchronization status, `false` if the node is no "
-                "longer synchronizing"
-            )
-        ),
     ]
     elapsed_avg: Annotated[
         int,
@@ -238,10 +289,6 @@ class ResponseModelJSON(pydantic.BaseModel, Generic[T]):
     node: NodeName
     method: Annotated[
         str, pydantic.Field(description="JSON RPC method being called")
-    ]
-    when: Annotated[
-        datetime.datetime,
-        pydantic.Field(description="Call issuing time"),
     ]
     elapsed: Annotated[
         int, pydantic.Field(description="Call response delay, in nanoseconds")

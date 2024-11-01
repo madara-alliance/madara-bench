@@ -208,9 +208,6 @@ async def benchmark_rpc(
     futures_block_no = [
         rpc.rpc_starknet_blockNumber(node, url) for node, url in urls.items()
     ]
-    futures_syncing = [
-        rpc.rpc_starknet_syncing(node, url) for node, url in urls.items()
-    ]
 
     # Block number and sync status is retrieved BEFORE rpc tests results, which
     # WILL lead to imprecisions, however we deem those to be negligeable (in
@@ -218,15 +215,10 @@ async def benchmark_rpc(
     block_nos = [
         resp.output for resp in await asyncio.gather(*futures_block_no)
     ]
-    sync_status = [
-        isinstance(resp.output, SyncStatus)
-        for resp in await asyncio.gather(*futures_syncing)
-    ]
     results = [await asyncio.gather(*futures) for futures in futures_bench]
 
     # Accumulates each future's results
     node = [resps[0].node for resps in results]
-    when = [min([resp.when for resp in resps]) for resps in results]
     elapsed = [[resp.elapsed for resp in resps] for resps in results]
     elapsed_avg = [sum(all) // len(all) for all in elapsed]
     elapsed_low = [min(all) for all in elapsed]
@@ -269,26 +261,20 @@ async def benchmark_rpc(
         models.NodeResponseBenchRpc(
             node=node,
             method=rpc_call,
-            when=when,
             block_number=block_number,
-            syncing=syncing,
             elapsed_avg=elapsed_avg,
             elapsed_low=elapsed_low,
             elapsed_high=elapsed_high,
         )
         for (
             node,
-            when,
             block_number,
-            syncing,
             elapsed_avg,
             elapsed_low,
             elapsed_high,
         ) in zip(
             node,
-            when,
             block_nos,
-            sync_status,
             elapsed_avg,
             elapsed_low,
             elapsed_high,

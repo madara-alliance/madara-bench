@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 import fastapi
 from starknet_py.net.client_models import Hash, Tag
@@ -82,17 +82,14 @@ TestInterval = Annotated[
     ),
 ]
 
-# DiffEnable = Annotated[
-#     bool,
-#     fastapi.Query(
-#         description=(
-#             "If `true` returns a Myers diff between each node's outputs as "
-#             "part of the result"
-#         )
-#     ),
-# ]
-#
-# DiffSource = Annotated[
-#     models.models.NodeName,
-#     fastapi.Query(description="The node used as the source of the diff"),
-# ]
+Latest = Literal["latest"]
+
+BlockRange = Annotated[
+    int | Latest,
+    fastapi.Query(description="Block number in a range of blocks, or 'latest'"),
+]
+
+RangeLimit = Annotated[
+    int | None,
+    fastapi.Query(description="Maximum number of benchmarks to return"),
+]
