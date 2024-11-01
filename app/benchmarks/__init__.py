@@ -41,9 +41,7 @@ from . import generators
 
 @dataclass
 class BenchmarkToolsRpc:
-    input_generator: Callable[
-        [dict[models.NodeName, str]], generators.InputGenerator
-    ]
+    input_generator: Callable[[dict[models.NodeName, str]], generators.InputGenerator]
     runner: Callable[..., Coroutine[Any, Any, models.ResponseModelJSON]]
 
 
@@ -175,8 +173,6 @@ async def benchmark_rpc(
     rpc_call: models.RpcCallBench,
     samples: models.query.TestSamples,
     interval: models.query.TestInterval,
-    # diff: models.query.DiffEnable,
-    # diff_source: models.query.DiffSource,
 ) -> models.ResponseModelBenchRpc:
     """Runs the actual rpc benchmark
 
@@ -199,22 +195,15 @@ async def benchmark_rpc(
 
     # Aggregates futures for them to be launched together
     futures_bench = [
-        [
-            with_sleep(tool.runner(node, url, **input), i * sleep)
-            for i, input in enumerate(inputs)
-        ]
+        [with_sleep(tool.runner(node, url, **input), i * sleep) for i, input in enumerate(inputs)]
         for node, url in urls.items()
     ]
-    futures_block_no = [
-        rpc.rpc_starknet_blockNumber(node, url) for node, url in urls.items()
-    ]
+    futures_block_no = [rpc.rpc_starknet_blockNumber(node, url) for node, url in urls.items()]
 
     # Block number and sync status is retrieved BEFORE rpc tests results, which
     # WILL lead to imprecisions, however we deem those to be negligeable (in
     # the order of magnitude of a few blocks at most)
-    block_nos = [
-        resp.output for resp in await asyncio.gather(*futures_block_no)
-    ]
+    block_nos = [resp.output for resp in await asyncio.gather(*futures_block_no)]
     results = [await asyncio.gather(*futures) for futures in futures_bench]
 
     # Accumulates each future's results
@@ -293,38 +282,27 @@ async def benchmark_system(
     f = MAPPINGS_SYSTEM[metric]
     sleep = interval * TO_MILLIS
 
-    urls = [
-        (node, rpc.rpc_url(node, container))
-        for node, container in containers.items()
-    ]
+    urls = [(node, rpc.rpc_url(node, container)) for node, container in containers.items()]
 
     # Aggregates futures for them to be launched together
     futures_bench = [
         [with_sleep(f(node, container), i * sleep) for i in range(samples)]
         for node, container in containers.items()
     ]
-    futures_block_no = [
-        rpc.rpc_starknet_blockNumber(node, url) for node, url in urls
-    ]
-    futures_syncing = [
-        rpc.rpc_starknet_syncing(node, url) for node, url in urls
-    ]
+    futures_block_no = [rpc.rpc_starknet_blockNumber(node, url) for node, url in urls]
+    futures_syncing = [rpc.rpc_starknet_syncing(node, url) for node, url in urls]
 
     # Block number and sync status is retrieved BEFORE rpc tests results, which
     # WILL lead to imprecisions, however we deem those to be negligeable (in
     # the order of magnitude of a few blocks at most)
-    block_nos = [
-        resp.output for resp in await asyncio.gather(*futures_block_no)
-    ]
+    block_nos = [resp.output for resp in await asyncio.gather(*futures_block_no)]
     sync_status = [
-        isinstance(resp.output, SyncStatus)
-        for resp in await asyncio.gather(*futures_syncing)
+        isinstance(resp.output, SyncStatus) for resp in await asyncio.gather(*futures_syncing)
     ]
     results = [await asyncio.gather(*futures) for futures in futures_bench]
 
     # Accumulates each future's results
     node = [resp[0].node for resp in results]
-    when = [min([resp.when for resp in resps]) for resps in results]
     value = [[resp.value for resp in resps] for resps in results]
 
     if value[0][0] is int:
@@ -336,12 +314,9 @@ async def benchmark_system(
         models.ResponseModelSystem(
             node=node,
             metric=metric,
-            when=when,
             block_number=block_number,
             syncing=syncing,
             value=value,
         )
-        for node, when, block_number, syncing, value in zip(
-            node, when, block_nos, sync_status, value_avg
-        )
+        for node, block_number, syncing, value in zip(node, block_nos, sync_status, value_avg)
     ]

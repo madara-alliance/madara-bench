@@ -65,10 +65,7 @@ ERROR_CODES: dict[int, dict[str, Any]] = {
         "model": error.ErrorMessage,
     },
     fastapi.status.HTTP_425_TOO_EARLY: {
-        "description": (
-            "Method was called on a block with an incompatible starknet "
-            "version"
-        ),
+        "description": ("Method was called on a block with an incompatible starknet " "version"),
         "model": error.ErrorMessage,
     },
     fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR: {
@@ -102,23 +99,19 @@ async def lifespan(_: fastapi.FastAPI):
 
 
 # =========================================================================== #
-#                                    FASTAPI                                  #
+#                                ERROR HANDLERS                               #
 # =========================================================================== #
 
 app = fastapi.FastAPI(lifespan=lifespan)
 
 
 @app.exception_handler(docker_errors.NotFound)
-async def excepton_handler_docker_not_found(
-    request: fastapi.Request, _: docker_errors.APIError
-):
+async def excepton_handler_docker_not_found(request: fastapi.Request, _: docker_errors.APIError):
     raise error.ErrorNodeNotFound(request.path_params.get("node", "all"))
 
 
 @app.exception_handler(docker_errors.APIError)
-async def excepton_handler_docker_api_error(
-    request: fastapi.Request, _: docker_errors.APIError
-):
+async def excepton_handler_docker_api_error(request: fastapi.Request, _: docker_errors.APIError):
     raise error.ErrorNodeSilent(request.path_params.get("node", "all"))
 
 
@@ -126,22 +119,14 @@ async def excepton_handler_docker_api_error(
 async def exception_handler_requests_json_decode_error(
     request: fastapi.Request, err: requests.exceptions.JSONDecodeError
 ):
-    api_call = (
-        str(request.url).removeprefix(str(request.base_url)).partition("?")[0]
-    )
+    api_call = str(request.url).removeprefix(str(request.base_url)).partition("?")[0]
     raise error.ErrorJsonDecode(request.path_params["node"], api_call, err)
 
 
 @app.exception_handler(ClientError)
-async def exception_handler_client_error(
-    request: fastapi.Request, err: ClientError
-):
-    api_call = (
-        str(request.url).removeprefix(str(request.base_url)).partition("?")[0]
-    )
-    raise error.ErrorRpcCall(
-        request.path_params.get("node", "all"), models.RpcCall(api_call), err
-    )
+async def exception_handler_client_error(request: fastapi.Request, err: ClientError):
+    api_call = str(request.url).removeprefix(str(request.base_url)).partition("?")[0]
+    raise error.ErrorRpcCall(request.path_params.get("node", "all"), models.RpcCall(api_call), err)
 
 
 # =========================================================================== #
@@ -157,9 +142,7 @@ async def benchmark_system(
 ) -> list[models.ResponseModelSystem]:
     containers = {node: system.container_get(node) for node in models.NodeName}
 
-    return await benchmarks.benchmark_system(
-        containers, metric, samples, interval
-    )
+    return await benchmarks.benchmark_system(containers, metric, samples, interval)
 
 
 @app.get(
@@ -175,6 +158,17 @@ async def benchmark_rpc(
     session: database.Session,
     limit: models.query.RangeLimit = None,
 ) -> list[models.models.NodeResponseBenchRpc]:
+    """## Retrieve node benchmark results
+
+    Benchmarks take place in a continuous background thread and are stored in a
+    local database. This endpoint allows you to query this database to retrieve
+    benchmarks results from a specific node, on a specific function, in a given
+    interval of blocks.
+
+    The range of blocks is start and end inclusive. Use `latest` as placeholder
+    for the highest current block number.
+    """
+
     def or_latest(n: int | models.query.Latest, latest: int) -> int:
         if n == "latest":
             return latest
@@ -230,13 +224,9 @@ async def node_get_cpu(
 
     match format:
         case models.CpuResultFormat.CPU:
-            return await system.system_cpu_normalized(
-                container.node, container.info
-            )
+            return await system.system_cpu_normalized(container.node, container.info)
         case models.CpuResultFormat.SYSTEM:
-            return await system.system_cpu_system(
-                container.node, container.info
-            )
+            return await system.system_cpu_system(container.node, container.info)
 
 
 @app.get("/system/memory/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM])
@@ -251,9 +241,7 @@ async def node_get_memory(
     return await system.system_memory(container.node, container.info)
 
 
-@app.get(
-    "/system/storage/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM]
-)
+@app.get("/system/storage/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM])
 async def node_get_storage(
     container: deps.Container,
 ) -> models.ResponseModelSystem[int]:
@@ -397,9 +385,7 @@ async def starknet_getBlockWithReceipts(
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
-) -> models.ResponseModelJSON[
-    PendingStarknetBlockWithReceipts | StarknetBlockWithReceipts
-]:
+) -> models.ResponseModelJSON[PendingStarknetBlockWithReceipts | StarknetBlockWithReceipts]:
     return await rpc.rpc_starknet_getBlockWithReceipts(
         url.node,
         url.info,
@@ -419,9 +405,7 @@ async def starknet_getBlockWithTxHashes(
     block_hash: models.query.BlockHash = None,
     block_number: models.query.BlockNumber = None,
     block_tag: models.query.BlockTag = "latest",
-) -> models.ResponseModelJSON[
-    PendingStarknetBlockWithTxHashes | StarknetBlockWithTxHashes
-]:
+) -> models.ResponseModelJSON[PendingStarknetBlockWithTxHashes | StarknetBlockWithTxHashes]:
     return await rpc.rpc_starknet_getBlockWithTxHashes(
         url.node,
         url.info,
@@ -626,9 +610,7 @@ async def starknet_getTransactionByHash(
     url: deps.Url,
     transaction_hash: models.query.TxHash,
 ) -> models.ResponseModelJSON[models.body.TxOut]:
-    return await rpc.rpc_starknet_getTransactionByHash(
-        url.node, url.info, transaction_hash
-    )
+    return await rpc.rpc_starknet_getTransactionByHash(url.node, url.info, transaction_hash)
 
 
 @app.get(
@@ -640,9 +622,7 @@ async def starknet_getTransactionReceipt(
     url: deps.Url,
     tx_hash: models.query.TxHash,
 ) -> models.ResponseModelJSON[TransactionReceipt]:
-    return await rpc.rpc_starknet_getTransactionReceipt(
-        url.node, url.info, tx_hash
-    )
+    return await rpc.rpc_starknet_getTransactionReceipt(url.node, url.info, tx_hash)
 
 
 @app.get(
@@ -654,9 +634,7 @@ async def starknet_getTransactionStatus(
     url: deps.Url,
     transaction_hash: models.query.TxHash,
 ) -> models.ResponseModelJSON[TransactionStatusResponse]:
-    return await rpc.rpc_starknet_getTransactionStatus(
-        url.node, url.info, transaction_hash
-    )
+    return await rpc.rpc_starknet_getTransactionStatus(url.node, url.info, transaction_hash)
 
 
 @app.get(

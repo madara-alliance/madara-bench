@@ -34,17 +34,12 @@ TxInvokeOut = Annotated[
 
 TxDeclareIn = Annotated[DeclareV1 | DeclareV2 | DeclareV3, fastapi.Body()]
 TxDeclareOut = Annotated[
-    DeclareTransactionV0
-    | DeclareTransactionV1
-    | DeclareTransactionV2
-    | DeclareTransactionV3,
+    DeclareTransactionV0 | DeclareTransactionV1 | DeclareTransactionV2 | DeclareTransactionV3,
     fastapi.Body(),
 ]
 
 TxDeployIn = Annotated[DeployAccountV1 | DeployAccountV3, fastapi.Body()]
-TxDeployOut = Annotated[
-    DeployAccountTransactionV1 | DeployAccountTransactionV3, fastapi.Body()
-]
+TxDeployOut = Annotated[DeployAccountTransactionV1 | DeployAccountTransactionV3, fastapi.Body()]
 
 TxIn = Annotated[TxInvokeIn | TxDeclareIn | TxDeployIn, fastapi.Body()]
 TxOut = Annotated[TxInvokeOut | TxDeclareOut | TxDeployOut, fastapi.Body()]
@@ -70,33 +65,21 @@ class _BodyEstimateMessageFee(pydantic.BaseModel):
     ]
     entry_point_selector: Annotated[
         Hash,
-        pydantic.Field(
-            description=(
-                "Entry point in the L1 contract used to send the message"
-            )
-        ),
+        pydantic.Field(description=("Entry point in the L1 contract used to send the message")),
     ]
     payload: Annotated[
         list[Hash],
-        pydantic.Field(
-            description=(
-                "The message payload being sent to an address on Starknet"
-            )
-        ),
+        pydantic.Field(description=("The message payload being sent to an address on Starknet")),
     ]
 
 
-EstimateMessageFee = Annotated[
-    _BodyEstimateMessageFee, fastapi.Body(include_in_schema=False)
-]
+EstimateMessageFee = Annotated[_BodyEstimateMessageFee, fastapi.Body(include_in_schema=False)]
 
 
 class _BodyGetEvents(pydantic.BaseModel):
     address: Annotated[
         Hash,
-        pydantic.Field(
-            description="On-chain address of the contract emitting the events"
-        ),
+        pydantic.Field(description="On-chain address of the contract emitting the events"),
     ]
     keys: Annotated[
         list[list[Hash]] | None,
@@ -118,15 +101,11 @@ class _BodyGetEvents(pydantic.BaseModel):
     ] = None
     to_block_number: Annotated[
         BlockNumber | None,
-        pydantic.Field(
-            description="Filter events up to this block (exclusive)"
-        ),
+        pydantic.Field(description="Filter events up to this block (exclusive)"),
     ] = None
     to_block_hash: Annotated[
         BlockHash | None,
-        pydantic.Field(
-            description="Filter events up to this block (exclusive)"
-        ),
+        pydantic.Field(description="Filter events up to this block (exclusive)"),
     ] = None
     continuation_token: Annotated[
         str | None,
@@ -159,6 +138,4 @@ class _BodySimulateTransactions(pydantic.BaseModel):
     skip_fee_charge: Annotated[bool, pydantic.Field()] = False
 
 
-SimulateTransactions = Annotated[
-    _BodySimulateTransactions, fastapi.Body(include_in_schema=False)
-]
+SimulateTransactions = Annotated[_BodySimulateTransactions, fastapi.Body(include_in_schema=False)]

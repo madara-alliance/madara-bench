@@ -1,4 +1,3 @@
-import datetime
 from enum import Enum
 from typing import Annotated, Any, Generic, TypeVar, Union
 
@@ -16,9 +15,7 @@ FieldHex = Annotated[
         examples=["0x0"],
     ),
 ]
-FieldBase64 = Annotated[
-    str, pydantic.Field(pattern=REGEX_BASE_64, examples=["0x0"])
-]
+FieldBase64 = Annotated[str, pydantic.Field(pattern=REGEX_BASE_64, examples=["0x0"])]
 
 
 class RpcCall(str, Enum):
@@ -40,9 +37,7 @@ class RpcCall(str, Enum):
     STARKNET_GET_NONCE = "starknet_getNonce"
     STARKNET_GET_STATE_UPDATE = "starknet_getStateUpdate"
     STARKNET_GET_STORAGE_AT = "starknet_getStorageAt"
-    STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX = (
-        "starknet_getTransactionByBlockIdAndIndex"
-    )
+    STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX = "starknet_getTransactionByBlockIdAndIndex"
     STARKNET_GET_TRANSACTION_BY_HASH = "starknet_getTransactionByHash"
     STARKNET_GET_TRANSACTION_RECEIPT = "starknet_getTransactionReceipt"
     STARKNET_GET_TRANSACTION_STATUS = "starknet_getTransactionStatus"
@@ -78,9 +73,7 @@ class RpcCallBench(str, Enum):
     STARKNET_GET_NONCE = "starknet_getNonce"
     STARKNET_GET_STATE_UPDATE = "starknet_getStateUpdate"
     STARKNET_GET_STORAGE_AT = "starknet_getStorageAt"
-    STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX = (
-        "starknet_getTransactionByBlockIdAndIndex"
-    )
+    STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX = "starknet_getTransactionByBlockIdAndIndex"
     STARKNET_GET_TRANSACTION_BY_HASH = "starknet_getTransactionByHash"
     STARKNET_GET_TRANSACTION_RECEIPT = "starknet_getTransactionReceipt"
     STARKNET_GET_TRANSACTION_STATUS = "starknet_getTransactionStatus"
@@ -128,9 +121,7 @@ class RpcCallBench(str, Enum):
             case 15:
                 return RpcCallBench.STARKNET_GET_STORAGE_AT
             case 16:
-                return (
-                    RpcCallBench.STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX
-                )
+                return RpcCallBench.STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX
             case 17:
                 return RpcCallBench.STARKNET_GET_TRANSACTION_BY_HASH
             case 18:
@@ -197,16 +188,10 @@ class ResponseModelSystem(pydantic.BaseModel, Generic[T]):
     """Holds system measurement (cpu, ram, storage) identifying data. This is
     used to store data resulting from a system measurement for use in
     benchmarking.
-
-    `time_start` is kept as a way to sort measurements if needed.
     """
 
     node: NodeName
     metric: SystemMetric
-    when: Annotated[
-        datetime.datetime,
-        pydantic.Field(description="Measurement issuing time"),
-    ]
     block_number: Annotated[
         int,
         pydantic.Field(description="Block number at the start of the tests"),
@@ -215,8 +200,7 @@ class ResponseModelSystem(pydantic.BaseModel, Generic[T]):
         bool,
         pydantic.Field(
             description=(
-                "Node synchronization status, `false` if the node is no "
-                "longer synchronizing"
+                "Node synchronization status, `false` if the node is no " "longer synchronizing"
             )
         ),
     ]
@@ -228,39 +212,23 @@ class NodeResponseBenchRpc(pydantic.BaseModel):
     used to store the results of several tests, averaged over multiple samples
     """
 
-    node: Annotated[
-        str, pydantic.Field(description="Node on which the test was run")
-    ]
-    method: Annotated[
-        str, pydantic.Field(description="JSON RPC method being tested")
-    ]
+    node: Annotated[str, pydantic.Field(description="Node on which the test was run")]
+    method: Annotated[str, pydantic.Field(description="JSON RPC method being tested")]
     block_number: Annotated[
         int,
         pydantic.Field(description="Block number at the start of the tests"),
     ]
     elapsed_avg: Annotated[
         int,
-        pydantic.Field(
-            description=(
-                "Average method latency over all samples, in nanoseconds"
-            )
-        ),
+        pydantic.Field(description=("Average method latency over all samples, in nanoseconds")),
     ]
     elapsed_low: Annotated[
         int,
-        pydantic.Field(
-            description=(
-                "Lowest method latency over all samples, in nanoseconds"
-            )
-        ),
+        pydantic.Field(description=("Lowest method latency over all samples, in nanoseconds")),
     ]
     elapsed_high: Annotated[
         int,
-        pydantic.Field(
-            description=(
-                "Highest method latency over all samples, in nanoseconds"
-            )
-        ),
+        pydantic.Field(description=("Highest method latency over all samples, in nanoseconds")),
     ]
 
 
@@ -273,11 +241,7 @@ class ResponseModelBenchRpc(pydantic.BaseModel):
     ]
     inputs: Annotated[
         list[dict[str, Any]],
-        pydantic.Field(
-            description=(
-                "Procedurally generated inputs used as part of the benchmark"
-            )
-        ),
+        pydantic.Field(description=("Procedurally generated inputs used as part of the benchmark")),
     ]
 
 
@@ -287,10 +251,6 @@ class ResponseModelJSON(pydantic.BaseModel, Generic[T]):
     """
 
     node: NodeName
-    method: Annotated[
-        str, pydantic.Field(description="JSON RPC method being called")
-    ]
-    elapsed: Annotated[
-        int, pydantic.Field(description="Call response delay, in nanoseconds")
-    ]
+    method: Annotated[str, pydantic.Field(description="JSON RPC method being called")]
+    elapsed: Annotated[int, pydantic.Field(description="Call response delay, in nanoseconds")]
     output: Annotated[T, pydantic.Field(description="JSON RPC node response")]

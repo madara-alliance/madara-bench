@@ -55,9 +55,7 @@ class ErrorNodeNotRunning(fastapi.HTTPException):
     def __init__(self, node: models.NodeName) -> None:
         super().__init__(
             status_code=fastapi.status.HTTP_417_EXPECTATION_FAILED,
-            detail=(
-                f"{node.name.capitalize()} node container is no longer running",
-            ),
+            detail=(f"{node.name.capitalize()} node container is no longer running",),
         )
 
 
@@ -107,23 +105,20 @@ class ErrorStarknetVersion(fastapi.HTTPException):
 
 
 class ErrorRpcCall(fastapi.HTTPException):
-    def __init__(
-        self, node: models.NodeName, method: models.RpcCall, e: ClientError
-    ) -> None:
+    def __init__(self, node: models.NodeName, method: models.RpcCall, e: ClientError) -> None:
         super().__init__(
             status_code=fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=(
-                f"{node.name.capitalize()} failed to call {method.value}, generated "
-                f"error: {e}"
+                f"{node.name.capitalize()} failed to call {method.value}, generated " f"error: {e}"
             ),
         )
 
 
 class ErrorNoInputFound(fastapi.HTTPException):
-    def __init__(self, method: models.RpcCallBench) -> None:
+    def __init__(self, context: str) -> None:
         super().__init__(
             status_code=fastapi.status.HTTP_412_PRECONDITION_FAILED,
-            detail=f"Found no valid input to benchmark {method.value} with",
+            detail=f"Found no valid input to benchmark {context}",
         )
 
 
@@ -132,8 +127,6 @@ def ensure_container_is_running(node: models.NodeName, container: Container):
         raise ErrorNodeNotRunning(node)
 
 
-def ensure_meet_version_requirements(
-    method: models.RpcCall, v: str, v_min: StarknetVersion
-):
+def ensure_meet_version_requirements(method: models.RpcCall, v: str, v_min: StarknetVersion):
     if v < v_min:
         raise ErrorStarknetVersion(method, v, v_min)

@@ -2,6 +2,7 @@ import random
 import typing
 from typing import Any, AsyncGenerator, cast
 
+import marshmallow
 from starknet_py.net.client_models import (
     DeclareTransactionV1,
     DeclareTransactionV2,
@@ -9,6 +10,7 @@ from starknet_py.net.client_models import (
     DeployAccountTransactionV1,
     DeployAccountTransactionV3,
     DeprecatedContractClass,
+    Hash,
     InvokeTransactionV1,
     InvokeTransactionV3,
     L1HandlerTransaction,
@@ -29,23 +31,16 @@ from starknet_py.net.models.transaction import (
 
 from app import error, models, rpc
 
-GENERATE_RANGE: int = 1_000
+GENERATE_RANGE: int = 2_000
 
 
 InputGenerator = AsyncGenerator[dict[str, Any], Any]
 
 
 async def tx_conv(
-    tx: Transaction, client: FullNodeClient
-) -> (
-    InvokeV1
-    | InvokeV3
-    | DeclareV1
-    | DeclareV2
-    | DeclareV3
-    | DeployAccountV1
-    | DeployAccountV3
-):
+    tx: Transaction,
+    client: FullNodeClient,
+) -> InvokeV1 | InvokeV3 | DeclareV1 | DeclareV2 | DeclareV3 | DeployAccountV1 | DeployAccountV3:
     if isinstance(tx, InvokeTransactionV1):
         tx_conv = InvokeV1(
             version=tx.version,
@@ -118,14 +113,15 @@ async def tx_conv(
             contract_address_salt=tx.contract_address_salt,
             constructor_calldata=tx.constructor_calldata,
         )
+    else:
+        raise
 
     return tx_conv
 
 
 async def latest_common_block_number(urls: dict[models.NodeName, str]) -> int:
     block_numbers: list[int] = [
-        (await rpc.rpc_starknet_blockNumber(node, url)).output
-        for node, url in urls.items()
+        (await rpc.rpc_starknet_blockNumber(node, url)).output for node, url in urls.items()
     ]
 
     return min(block_numbers)
@@ -141,9 +137,7 @@ async def gen_param_block_number(
 ) -> InputGenerator:
     while True:
         block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_number = random.randrange(max(block_number - GENERATE_RANGE, 0), block_number)
         yield {"block_number": block_number}
 
 
@@ -160,20 +154,20 @@ async def gen_param_class_hash(
 
     while True:
         block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_min = max(0, block_number - GENERATE_RANGE)
+        block_number = random.randrange(block_min, block_number)
         state_update = await client.get_state_update(block_number=block_number)
 
         while (
             len(state_update.state_diff.declared_classes) == 0
             and len(state_update.state_diff.deprecated_declared_classes) == 0
         ):
-            # This is safe since block 0 has declared classes
             block_number -= 1
-            state_update = await client.get_state_update(
-                block_number=block_number
-            )
+
+            if block_number < block_min:
+                raise error.ErrorNoInputFound("class hash")
+
+            state_update = await client.get_state_update(block_number=block_number)
 
         if len(state_update.state_diff.declared_classes) != 0:
             class_hash = state_update.state_diff.declared_classes[0].class_hash
@@ -199,17 +193,17 @@ async def gen_param_class_contract_address(
 
     while True:
         block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_min = max(0, block_number - GENERATE_RANGE)
+        block_number = random.randrange(block_min, block_number)
         state_update = await client.get_state_update(block_number=block_number)
 
         while len(state_update.state_diff.deployed_contracts) == 0:
-            # This is safe since block 0 has declared classes
             block_number -= 1
-            state_update = await client.get_state_update(
-                block_number=block_number
-            )
+
+            if block_number < block_min:
+                raise error.ErrorNoInputFound("contract address")
+
+            state_update = await client.get_state_update(block_number=block_number)
 
         contract_address = state_update.state_diff.deployed_contracts[0].address
 
@@ -226,14 +220,16 @@ async def gen_param_tx_hash(
 
     while True:
         block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_min = max(block_number - GENERATE_RANGE, 0)
+        block_number = random.randrange(block_min, block_number)
         block = await client.get_block(block_number=block_number)
 
         while len(block.transactions) == 0:
-            # This is safe since block 0 has transactions
             block_number -= 1
+
+            if block_number < block_min:
+                raise error.ErrorNoInputFound("transaction hash")
+
             block = await client.get_block(block_number=block_number)
 
         yield {"tx_hash": block.transactions[0].hash}
@@ -255,39 +251,28 @@ async def gen_starknet_estimateFee(
             error.StarknetVersion.V0_13_1_1,
         )
 
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_number = random.randrange(block_min, block_number)
         block = await client.get_block(block_number=block_number)
         txs = block.transactions
 
         if len(txs) > 0:
-            tx_status = await client.get_transaction_status(
-                typing.cast(int, txs[0].hash)
-            )
-            tx_status = tx_status.execution_status
+            is_reverted = await client.get_transaction_status(typing.cast(int, txs[0].hash))
+            is_reverted = is_reverted.execution_status == TransactionExecutionStatus.REVERTED
         else:
-            tx_status = TransactionExecutionStatus.SUCCEEDED
+            is_reverted = False
 
-        while (
-            len(txs) == 0
-            or txs[0].version == 0
-            or tx_status == TransactionExecutionStatus.REVERTED
-        ):
+        while len(txs) == 0 or txs[0].version == 0 or is_reverted:
             block_number -= 1
 
-            if block_number < 0:
-                raise error.ErrorNoInputFound(
-                    models.RpcCallBench.STARKNET_ESTIMATE_FEE
-                )
+            if block_number < block_min:
+                raise error.ErrorNoInputFound(models.RpcCallBench.STARKNET_ESTIMATE_FEE)
 
             block = await client.get_block(block_number=block_number)
             txs = block.transactions
-            tx_status = await client.get_transaction_status(
-                typing.cast(int, txs[0].hash)
-            )
-            tx_status = tx_status.execution_status
+            is_reverted = await client.get_transaction_status(typing.cast(int, txs[0].hash))
+            is_reverted = is_reverted.execution_status == TransactionExecutionStatus.REVERTED
 
+        # No risk of having and L1HandlerTransaction as it is v0
         tx = await tx_conv(txs[0], client)
 
         yield {"tx": tx, "block_number": block_number - 1}
@@ -309,38 +294,26 @@ async def gen_starknet_estimate_message_fee(
             error.StarknetVersion.V0_13_1_1,
         )
 
-        block_number = random.randrange(
-            max(0, block_number - GENERATE_RANGE), block_number
-        )
+        block_number = random.randrange(block_min, block_number)
         block = await client.get_block(block_number=block_number)
         txs = block.transactions
 
         if len(txs) > 0:
-            tx_status = await client.get_transaction_status(
-                typing.cast(int, txs[0].hash)
-            )
-            tx_status = tx_status.execution_status
+            is_reverted = await client.get_transaction_status(typing.cast(int, txs[0].hash))
+            is_reverted = is_reverted.execution_status == TransactionExecutionStatus.REVERTED
         else:
-            tx_status = TransactionExecutionStatus.SUCCEEDED
+            is_reverted = False
 
-        while (
-            len(txs) == 0
-            or not isinstance(txs[0], L1HandlerTransaction)
-            or tx_status == TransactionExecutionStatus.REVERTED
-        ):
+        while len(txs) == 0 or not isinstance(txs[0], L1HandlerTransaction) or is_reverted:
             block_number -= 1
 
-            if block_number < 0:
-                raise error.ErrorNoInputFound(
-                    models.RpcCallBench.STARKNET_ESTIMATE_MESSAGE_FEE
-                )
+            if block_number < block_min:
+                raise error.ErrorNoInputFound(models.RpcCallBench.STARKNET_ESTIMATE_MESSAGE_FEE)
 
             block = await client.get_block(block_number=block_number)
             txs = block.transactions
-            tx_status = await client.get_transaction_status(
-                typing.cast(int, txs[0].hash)
-            )
-            tx_status = tx_status.execution_status
+            is_reverted = await client.get_transaction_status(typing.cast(int, txs[0].hash))
+            is_reverted = is_reverted.execution_status == TransactionExecutionStatus.REVERTED
 
         tx = txs[0]
 
@@ -349,7 +322,7 @@ async def gen_starknet_estimate_message_fee(
                 from_address="0x0",
                 to_address=tx.contract_address,
                 entry_point_selector=tx.entry_point_selector,
-                payload=tx.calldata,
+                payload=typing.cast(list[Hash], tx.calldata),
             ),
             "block_number": block_number,
         }
@@ -362,13 +335,17 @@ async def gen_starknet_getEvents(
 
     while True:
         block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_min = max(0, block_number - GENERATE_RANGE)
+        block_number = random.randrange(block_min, block_number)
 
-        block_with_receits = await client.get_block_with_receipts(
-            block_number=block_number
-        )
+        # This is due to a deserialization error on Starknet-py's side for
+        # L1 messages :/
+        while True:
+            try:
+                block_with_receits = await client.get_block_with_receipts(block_number=block_number)
+                break
+            except marshmallow.ValidationError:
+                block_number -= 1
 
         while (
             len(block_with_receits.transactions) == 0
@@ -376,21 +353,20 @@ async def gen_starknet_getEvents(
         ):
             block_number -= 1
 
-            if block_number < 0:
-                raise error.ErrorNoInputFound(
-                    models.RpcCallBench.STARKNET_GET_EVENTS
-                )
+            if block_number < block_min:
+                raise error.ErrorNoInputFound(models.RpcCallBench.STARKNET_GET_EVENTS)
 
-            block_with_receits = await client.get_block_with_receipts(
-                block_number=block_number
-            )
+            try:
+                block_with_receits = await client.get_block_with_receipts(block_number=block_number)
+            except marshmallow.ValidationError:
+                continue
 
         events = block_with_receits.transactions[0].receipt.events
 
         yield {
             "body": models.body._BodyGetEvents(
                 address=events[0].from_address,
-                keys=[events[0].keys],
+                keys=[typing.cast(list[Hash], events[0].keys)],
                 from_block_number=max(0, block_number - GENERATE_RANGE),
             )
         }
@@ -409,17 +385,17 @@ async def gen_starknet_getStorageAt(
 
     while True:
         block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_min = max(block_number - GENERATE_RANGE, 0)
+        block_number = random.randrange(block_min, block_number)
         state_update = await client.get_state_update(block_number=block_number)
 
         while len(state_update.state_diff.storage_diffs) < 2:
-            # This is safe since block 0 has storage diffs
             block_number -= 1
-            state_update = await client.get_state_update(
-                block_number=block_number
-            )
+
+            if block_number < block_min:
+                raise error.ErrorNoInputFound(models.RpcCallBench.STARKNET_GET_STORAGE_AT)
+
+            state_update = await client.get_state_update(block_number=block_number)
 
         storage_diff = state_update.state_diff.storage_diffs[1]
         storage_entry = storage_diff.storage_entries[0]
@@ -437,14 +413,18 @@ async def gen_starknet_getTransactionByBlockIdAndIndex(
 
     while True:
         block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_min = max(block_number - GENERATE_RANGE, 0)
+        block_number = random.randrange(block_min, block_number)
         block = await client.get_block(block_number=block_number)
 
         while len(block.transactions) == 0:
-            # This is safe since block 0 has transactions
             block_number -= 1
+
+            if block_number < block_min:
+                raise error.ErrorNoInputFound(
+                    models.RpcCallBench.STARKNET_GET_TRANSACTION_BY_BLOCK_ID_AND_INDEX
+                )
+
             block = await client.get_block(block_number=block_number)
 
         yield {
@@ -460,35 +440,20 @@ async def gen_starknet_simulateTransactions(
 
     while True:
         block_number = await latest_common_block_number(urls)
-        block_number = random.randrange(
-            max(block_number - GENERATE_RANGE, 0), block_number
-        )
+        block_min = max(0, block_number - GENERATE_RANGE)
+        block_number = random.randrange(block_min, block_number)
         block = await client.get_block(block_number=block_number)
         txs = block.transactions
-
-        if len(txs) > 0:
-            tx_status = await client.get_transaction_status(
-                typing.cast(int, txs[0].hash)
-            )
-            tx_status = tx_status.execution_status
-        else:
-            tx_status = TransactionExecutionStatus.SUCCEEDED
 
         # Allows reverted transactions to be simulated
         while len(txs) == 0 or txs[0].version == 0:
             block_number -= 1
 
-            if block_number < 0:
-                raise error.ErrorNoInputFound(
-                    models.RpcCallBench.STARKNET_SIMULATE_TRANSACTIONS
-                )
+            if block_number < block_min:
+                raise error.ErrorNoInputFound(models.RpcCallBench.STARKNET_SIMULATE_TRANSACTIONS)
 
             block = await client.get_block(block_number=block_number)
             txs = block.transactions
-            tx_status = await client.get_transaction_status(
-                typing.cast(int, txs[0].hash)
-            )
-            tx_status = tx_status.execution_status
 
         txs = [
             await tx_conv(tx, client)

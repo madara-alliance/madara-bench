@@ -8,18 +8,18 @@
   version = "0.1.0"
 
 [tool.poetry.dependencies]
+  asyncio = "^3.4.3"
   docker = "^7.1.0"
   fastapi = { extras = ["standard"], version = "^0.114.0" }
+  psycopg2-binary = "^2.9.10"
   python = ">=3.12,<3.13"
   requests = "^2.32.3"
+  sqlmodel = "^0.0.22"
   starknet-py = "^0.24.1"
-sqlmodel = "^0.0.22"
-psycopg2-binary = "^2.9.10"
-asyncio = "^3.4.3"
 
 [tool.ruff]
   fix = true
-  line-length = 80
+  line-length = 100
 
 [tool.ruff.format]
   docstring-code-format = true

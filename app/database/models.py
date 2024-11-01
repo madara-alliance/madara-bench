@@ -1,5 +1,6 @@
 from enum import Enum
 
+import sqlalchemy
 import sqlmodel
 
 from app import models
@@ -122,10 +123,8 @@ class BlockDB(sqlmodel.SQLModel, table=True):
 
         return [
             models.models.NodeResponseBenchRpc(
-                node=models.models.NodeName.from_scalar_idx(bench.node_idx)
-                or "invalid",
-                method=models.models.RpcCallBench.from_scalar_idx(method_idx)
-                or "invalid",
+                node=models.models.NodeName.from_scalar_idx(bench.node_idx) or "invalid",
+                method=models.models.RpcCallBench.from_scalar_idx(method_idx) or "invalid",
                 block_number=block_number,
                 elapsed_avg=bench.elapsed_avg,
                 elapsed_low=bench.elapsed_low,
@@ -139,9 +138,9 @@ class BenchmarkDB(sqlmodel.SQLModel, table=True):
     # columns
     id: int | None = sqlmodel.Field(default=None, primary_key=True)
     node_idx: int = sqlmodel.Field(index=True)
-    elapsed_avg: int
-    elapsed_low: int
-    elapsed_high: int
+    elapsed_avg: int = sqlmodel.Field(sa_column=sqlalchemy.Column(sqlalchemy.BigInteger))
+    elapsed_low: int = sqlmodel.Field(sa_column=sqlalchemy.Column(sqlalchemy.BigInteger))
+    elapsed_high: int = sqlmodel.Field(sa_column=sqlalchemy.Column(sqlalchemy.BigInteger))
 
     # foreign keys
     block_id: int | None = sqlmodel.Field(default=None)
@@ -159,12 +158,8 @@ class BenchmarkDB(sqlmodel.SQLModel, table=True):
     )
 
     # relationships
-    block: BlockDB = sqlmodel.Relationship(
-        back_populates="benchmarks", passive_deletes="all"
-    )
-    input: "InputDB" = sqlmodel.Relationship(
-        back_populates="benchmark", passive_deletes="all"
-    )
+    block: BlockDB = sqlmodel.Relationship(back_populates="benchmarks", passive_deletes="all")
+    input: "InputDB" = sqlmodel.Relationship(back_populates="benchmark", passive_deletes="all")
 
 
 class InputDB(sqlmodel.SQLModel, table=True):
@@ -173,6 +168,4 @@ class InputDB(sqlmodel.SQLModel, table=True):
     input: str
 
     # relationships
-    benchmark: BenchmarkDB = sqlmodel.Relationship(
-        back_populates="input", passive_deletes="all"
-    )
+    benchmark: BenchmarkDB = sqlmodel.Relationship(back_populates="input", passive_deletes="all")
