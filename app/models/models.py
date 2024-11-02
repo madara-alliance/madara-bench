@@ -141,10 +141,19 @@ class RpcCallBench(str, Enum):
 
 
 class SystemMetric(str, Enum):
-    CPU = "cpu"
     CPU_SYSTEM = "cpu_system"
     MEMORY = "memory"
     STORAGE = "storage"
+
+    @staticmethod
+    def from_scalar_idx(idx: int) -> Union["SystemMetric", None]:
+        match idx:
+            case 0:
+                return SystemMetric.CPU_SYSTEM
+            case 1:
+                return SystemMetric.MEMORY
+            case 2:
+                return SystemMetric.STORAGE
 
 
 class NodeName(str, Enum):
@@ -165,46 +174,19 @@ class NodeName(str, Enum):
                 return NodeName.PATHFINDER
 
 
-class CpuResultFormat(str, Enum):
-    """
-    ### CPU
-
-    CPU usage will be returned as a percent value normalized to the number of
-    CPU cores. This means 800% usage would represent 800% of the capabilities
-    of a single core
-
-    ### SYSTEM
-
-    CPU usage will be returned as a percent value of total system
-    usage as opposed to being normalized to the number of CPU cores. This means
-    75% usage would represent 75% of system usage
-    """
-
-    CPU = "cpu"
-    SYSTEM = "system"
-
-
-class ResponseModelSystem(pydantic.BaseModel, Generic[T]):
+class ResponseModelSystem(pydantic.BaseModel):
     """Holds system measurement (cpu, ram, storage) identifying data. This is
     used to store data resulting from a system measurement for use in
     benchmarking.
     """
 
-    node: NodeName
-    metric: SystemMetric
+    node: Annotated[str, pydantic.Field(description="Node on which the test was run")]
+    metric: Annotated[str, pydantic.Field(description="System metric being tested")]
     block_number: Annotated[
         int,
         pydantic.Field(description="Block number at the start of the tests"),
     ]
-    syncing: Annotated[
-        bool,
-        pydantic.Field(
-            description=(
-                "Node synchronization status, `false` if the node is no " "longer synchronizing"
-            )
-        ),
-    ]
-    value: Annotated[T, pydantic.Field(description="System measurement result")]
+    value: Annotated[int, pydantic.Field(description="System measurement result")]
 
 
 class NodeResponseBenchRpc(pydantic.BaseModel):

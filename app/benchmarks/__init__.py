@@ -32,7 +32,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, TypeVar
 
 from docker.models.containers import Container as DockerContainer
-from starknet_py.net.client_models import SyncStatus
 
 from app import models, rpc, system
 
@@ -151,7 +150,6 @@ SystemRunner = Callable[
 ]
 
 MAPPINGS_SYSTEM: dict[models.SystemMetric, SystemRunner] = {
-    models.SystemMetric.CPU: system.system_cpu_normalized,
     models.SystemMetric.CPU_SYSTEM: system.system_cpu_system,
     models.SystemMetric.MEMORY: system.system_memory,
     models.SystemMetric.STORAGE: system.system_storage,
@@ -290,33 +288,24 @@ async def benchmark_system(
         for node, container in containers.items()
     ]
     futures_block_no = [rpc.rpc_starknet_blockNumber(node, url) for node, url in urls]
-    futures_syncing = [rpc.rpc_starknet_syncing(node, url) for node, url in urls]
 
     # Block number and sync status is retrieved BEFORE rpc tests results, which
     # WILL lead to imprecisions, however we deem those to be negligeable (in
     # the order of magnitude of a few blocks at most)
     block_nos = [resp.output for resp in await asyncio.gather(*futures_block_no)]
-    sync_status = [
-        isinstance(resp.output, SyncStatus) for resp in await asyncio.gather(*futures_syncing)
-    ]
     results = [await asyncio.gather(*futures) for futures in futures_bench]
 
     # Accumulates each future's results
     node = [resp[0].node for resp in results]
     value = [[resp.value for resp in resps] for resps in results]
-
-    if value[0][0] is int:
-        value_avg = [sum(all) // len(all) for all in value]
-    else:
-        value_avg = [sum(all) / len(all) for all in value]
+    value_avg = [sum(all) // len(all) for all in value]
 
     return [
         models.ResponseModelSystem(
             node=node,
             metric=metric,
             block_number=block_number,
-            syncing=syncing,
             value=value,
         )
-        for node, block_number, syncing, value in zip(node, block_nos, sync_status, value_avg)
+        for node, block_number, value in zip(node, block_nos, value_avg)
     ]

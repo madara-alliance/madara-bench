@@ -30,7 +30,7 @@ from starknet_py.net.client_models import (
     TransactionStatusResponse,
 )
 
-from app import benchmarks, database, deps, error, models, rpc, system
+from app import database, deps, error, models, rpc, system
 
 MADARA: str = "madara_runner"
 MADARA_DB: str = "madara_runner_db"
@@ -77,7 +77,6 @@ ERROR_CODES: dict[int, dict[str, Any]] = {
 
 class Tags(str, Enum):
     BENCH = "bench"
-    SYSTEM = "system"
     READ = "read"
     TRACE = "trace"
     DEBUG = "debug"
@@ -91,11 +90,32 @@ class Tags(str, Enum):
 @asynccontextmanager
 async def lifespan(_: fastapi.FastAPI):
     database.init_db_and_tables()
-    task = asyncio.create_task(database.db_bench_routine())
+
+    task1 = asyncio.create_task(database.db_bench_routine_rpc())
+    task2 = asyncio.create_task(database.db_bench_routine_sys())
 
     yield
 
-    task.cancel()
+    try:
+        ex1 = task1.exception()
+        if ex1:
+            raise ex1
+    except asyncio.CancelledError:
+        pass
+    except asyncio.InvalidStateError:
+        pass
+
+    try:
+        ex2 = task2.exception()
+        if ex2:
+            raise ex2
+    except asyncio.CancelledError:
+        pass
+    except asyncio.InvalidStateError:
+        pass
+
+    task1.cancel()
+    task2.cancel()
 
 
 # =========================================================================== #
@@ -136,13 +156,46 @@ async def exception_handler_client_error(request: fastapi.Request, err: ClientEr
 
 @app.get("/bench/system/", responses={**ERROR_CODES}, tags=[Tags.BENCH])
 async def benchmark_system(
-    metric: models.SystemMetric,
-    samples: models.query.TestSamples = 10,
-    interval: models.query.TestInterval = 100,
+    metrics: models.SystemMetric,
+    node: models.models.NodeName,
+    block_start: models.query.BlockRange,
+    block_end: models.query.BlockRange,
+    session: database.Session,
+    limit: models.query.RangeLimit = None,
 ) -> list[models.ResponseModelSystem]:
-    containers = {node: system.container_get(node) for node in models.NodeName}
+    def or_latest(n: int | models.query.Latest, latest: int) -> int:
+        if n == "latest":
+            return latest
+        else:
+            return n
 
-    return await benchmarks.benchmark_system(containers, metric, samples, interval)
+    latest = session.exec(
+        sqlmodel.select(database.models.BlockDB)
+        .order_by(sqlmodel.desc(database.models.BlockDB.id))
+        .limit(1)
+    ).first()
+
+    if latest:
+        latest = latest.id
+    else:
+        latest = 0
+
+    block_start = or_latest(block_start, latest)
+    block_end = or_latest(block_end, latest)
+
+    metrics_idx = database.models.SystemMetricDB.from_model_bench(metrics)
+    node_idx = database.models.NodeDB.from_model_bench(node)
+    blocks = session.exec(
+        sqlmodel.select(database.models.BlockDB)
+        .join(database.models.BenchmarkSystemDB)
+        .where(database.models.BlockDB.id >= block_start)
+        .where(database.models.BlockDB.id <= block_end)
+        .where(database.models.BenchmarkSystemDB.node_idx == node_idx)
+        .where(database.models.BenchmarkSystemDB.metrics_idx == metrics_idx)
+        .limit(limit)
+    ).all()
+
+    return [resp for block in blocks for resp in block.node_response_sys(metrics_idx)]
 
 
 @app.get(
@@ -193,66 +246,15 @@ async def benchmark_rpc(
     node_idx = database.models.NodeDB.from_model_bench(node)
     blocks = session.exec(
         sqlmodel.select(database.models.BlockDB)
-        .join(database.models.BenchmarkDB)
+        .join(database.models.BenchmarkRpcDB)
         .where(database.models.BlockDB.id >= block_start)
         .where(database.models.BlockDB.id <= block_end)
-        .where(database.models.BlockDB.method_idx == method_idx)
-        .where(database.models.BenchmarkDB.node_idx == node_idx)
+        .where(database.models.BenchmarkRpcDB.node_idx == node_idx)
+        .where(database.models.BenchmarkRpcDB.method_idx == method_idx)
         .limit(limit)
     ).all()
 
-    return [resp for block in blocks for resp in block.node_response()]
-
-
-# =========================================================================== #
-#                                SYSTEM METRICS                               #
-# =========================================================================== #
-
-
-@app.get("/system/cpu/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM])
-async def node_get_cpu(
-    container: deps.Container,
-    format: models.CpuResultFormat = models.CpuResultFormat.CPU,
-) -> models.ResponseModelSystem[float]:
-    """## Get node CPU usage.
-
-    Return format depends on the value of `system`, but will default to a
-    percent value normalized to the number of CPU cores. So, for example, 800%
-    usage would represent 800% of the capabilites of a single core, and not the
-    entire system.
-    """
-
-    match format:
-        case models.CpuResultFormat.CPU:
-            return await system.system_cpu_normalized(container.node, container.info)
-        case models.CpuResultFormat.SYSTEM:
-            return await system.system_cpu_system(container.node, container.info)
-
-
-@app.get("/system/memory/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM])
-async def node_get_memory(
-    container: deps.Container,
-) -> models.ResponseModelSystem[int]:
-    """## Get node memory usage.
-
-    Fetches the amount of ram used by the node. Result will be in _bytes_.
-    """
-
-    return await system.system_memory(container.node, container.info)
-
-
-@app.get("/system/storage/{node}", responses={**ERROR_CODES}, tags=[Tags.SYSTEM])
-async def node_get_storage(
-    container: deps.Container,
-) -> models.ResponseModelSystem[int]:
-    """## Returns node storage usage
-
-    Fetches the amount of space the node database is currently taking up. This
-    is currently set up to be the size of `/data` where the node db should be
-    set up. Result will be in _bytes_.
-    """
-
-    return await system.system_storage(container.node, container.info)
+    return [resp for block in blocks for resp in block.node_response_rpc(method_idx)]
 
 
 # =========================================================================== #
