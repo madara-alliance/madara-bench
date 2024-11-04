@@ -167,12 +167,7 @@ def or_latest(n: int | models.query.Latest, latest: int) -> int:
         return n
 
 
-apply_key = lambda x: x.block_number
-apply_sort = lambda l: sorted(l, key=apply_key)
-apply_merge = lambda l: functools.reduce(deduplicate_merge, l, [])
-
-
-def deduplicate_merge(
+def deduplicate_merge_rpc(
     acc: list[models.models.NodeResponseBenchRpc], resp: NodeResponseBenchRpc
 ) -> list[models.models.NodeResponseBenchRpc]:
     if acc and acc[-1].block_number == resp.block_number:
@@ -185,36 +180,25 @@ def deduplicate_merge(
     return acc
 
 
-@app.get("/bench/system/", responses={**ERROR_CODES}, tags=[Tags.BENCH])
-async def benchmark_system(
-    metrics: models.SystemMetric,
-    node: models.models.NodeName,
-    block_start: models.query.BlockRange,
-    block_end: models.query.BlockRange,
-    session: database.Session,
-    limit: models.query.RangeLimit = None,
-) -> list[models.ResponseModelSystem]:
-    l = latest(session)
-    block_start = or_latest(block_start, l)
-    block_end = or_latest(block_end, l)
+def deduplicate_merge_sys(
+    acc: list[models.models.ResponseModelSystem], resp: models.models.ResponseModelSystem
+) -> list[models.models.ResponseModelSystem]:
+    if acc and acc[-1].block_number == resp.block_number:
+        # This only works because benchmarks for a same metric have the same sample count
+        acc[-1].value = (acc[-1].value + resp.value) // 2
+    else:
+        acc.append(resp)
+    return acc
 
-    metrics_idx = database.models.SystemMetricDB.from_model_bench(metrics)
-    node_idx = database.models.NodeDB.from_model_bench(node)
-    blocks = session.exec(
-        sqlmodel.select(database.models.BlockDB, database.models.BenchmarkSystemDB)
-        .join(database.models.BenchmarkSystemDB)
-        .where(database.models.BlockDB.id >= block_start)
-        .where(database.models.BlockDB.id <= block_end)
-        .where(database.models.BenchmarkSystemDB.node_idx == node_idx)
-        .where(database.models.BenchmarkSystemDB.metrics_idx == metrics_idx)
-        .limit(limit)
-    ).all()
 
-    return [bench.node_response(block.id) for block, bench in blocks]
+apply_key = lambda x: x.block_number
+apply_sort = lambda l: sorted(l, key=apply_key)
+apply_merge_rpc = lambda l: functools.reduce(deduplicate_merge_rpc, l, [])
+apply_merge_sys = lambda l: functools.reduce(deduplicate_merge_sys, l, [])
 
 
 @app.get(
-    "/bench/rpc/",
+    "/bench/rpc",
     responses={**ERROR_CODES},
     tags=[Tags.BENCH],
 )
@@ -253,7 +237,35 @@ async def benchmark_rpc(
     ).all()
 
     resps = [bench.node_response(block.id) for block, bench in blocks]
-    return apply_merge(apply_sort(resps))
+    return apply_merge_rpc(apply_sort(resps))
+
+
+@app.get("/bench/sys", responses={**ERROR_CODES}, tags=[Tags.BENCH])
+async def benchmark_sys(
+    metrics: models.SystemMetric,
+    node: models.models.NodeName,
+    block_start: models.query.BlockRange,
+    block_end: models.query.BlockRange,
+    session: database.Session,
+    limit: models.query.RangeLimit = None,
+) -> list[models.ResponseModelSystem]:
+    l = latest(session)
+    block_start = or_latest(block_start, l)
+    block_end = or_latest(block_end, l)
+
+    metrics_idx = database.models.SystemMetricDB.from_model_bench(metrics)
+    node_idx = database.models.NodeDB.from_model_bench(node)
+    blocks = session.exec(
+        sqlmodel.select(database.models.BlockDB, database.models.BenchmarkSystemDB)
+        .join(database.models.BenchmarkSystemDB)
+        .where(database.models.BlockDB.id >= block_start)
+        .where(database.models.BlockDB.id <= block_end)
+        .where(database.models.BenchmarkSystemDB.node_idx == node_idx)
+        .where(database.models.BenchmarkSystemDB.metrics_idx == metrics_idx)
+        .limit(limit)
+    ).all()
+
+    return [bench.node_response(block.id) for block, bench in blocks]
 
 
 @app.post(
@@ -292,8 +304,8 @@ async def benchmark_graph_rpc(
 
     data = [
         merge
-        for blocks in blocks
-        for merge in apply_merge(apply_sort([bnch.node_response(blk.id) for blk, bnch in blocks]))
+        for blks in blocks
+        for merge in apply_merge_rpc(apply_sort([bnch.node_response(blk.id) for blk, bnch in blks]))
     ]
 
     if len(data) == 0:
@@ -302,7 +314,7 @@ async def benchmark_graph_rpc(
     # WARNING: THERE BE DRAGONS, THE FOLLOWING CODE IS AI GENERATED 🐉
 
     # Generate the plot
-    fig = graph.generate_line_graph(data, method.value, with_error)
+    fig = graph.generate_line_graph_rpc(data, method.value, with_error)
 
     # Create a bytes buffer for the image
     buf = io.BytesIO()
@@ -326,13 +338,82 @@ async def benchmark_graph_rpc(
     )
 
 
+@app.post(
+    "/bench/graph/sys",
+    responses={**ERROR_CODES, 200: {"content": {"image/png": {}}}},
+    response_class=fastapi.responses.Response,
+    tags=[Tags.BENCH],
+)
+async def benchmark_graph_sys(
+    metrics: models.SystemMetric,
+    nodes: list[models.models.NodeName],
+    block_start: models.query.BlockRange,
+    block_end: models.query.BlockRange,
+    session: database.Session,
+):
+    l = latest(session)
+    block_start = or_latest(block_start, l)
+    block_end = or_latest(block_end, l)
+
+    metrics_idx = database.models.SystemMetricDB.from_model_bench(metrics)
+    blocks = [
+        session.exec(
+            sqlmodel.select(database.models.BlockDB, database.models.BenchmarkSystemDB)
+            .join(database.models.BenchmarkSystemDB)
+            .where(database.models.BlockDB.id >= block_start)
+            .where(database.models.BlockDB.id <= block_end)
+            .where(
+                database.models.BenchmarkSystemDB.node_idx
+                == database.models.NodeDB.from_model_bench(node)
+            )
+            .where(database.models.BenchmarkSystemDB.metrics_idx == metrics_idx)
+        ).all()
+        for node in nodes
+    ]
+
+    data = [
+        merge
+        for blks in blocks
+        for merge in apply_merge_sys(apply_sort([bnch.node_response(blk.id) for blk, bnch in blks]))
+    ]
+
+    if len(data) == 0:
+        raise error.ErrorNoInputFound(metrics.value)
+
+    # WARNING: THERE BE DRAGONS, THE FOLLOWING CODE IS AI GENERATED 🐉
+
+    # Generate the plot
+    fig = graph.generate_line_graph_sys(data, metrics, metrics.value)
+
+    # Create a bytes buffer for the image
+    buf = io.BytesIO()
+
+    # Save the plot to the buffer in PNG format
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=300)
+
+    # Close the figure to free memory
+    matplotlib.pyplot.close(fig)
+
+    # Seek to the start of the buffer
+    buf.seek(0)
+
+    # Return the image as a downloadable file
+    return fastapi.responses.StreamingResponse(
+        buf,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f"attachment; filename={metrics.value}_{block_start}_{block_end}.png"
+        },
+    )
+
+
 # =========================================================================== #
 #                                   READ API                                  #
 # =========================================================================== #
 
 
 @app.get(
-    "/info/rpc/starknet_blockHashAndNumber/{node}",
+    "/info/rpc/starknet_blockHashAndNumber",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -343,7 +424,7 @@ async def starknet_blockHashAndNumber(
 
 
 @app.get(
-    "/info/rpc/starknet_blockNumber/{node}",
+    "/info/rpc/starknet_blockNumber",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -354,7 +435,7 @@ async def starknet_blockNumber(
 
 
 @app.post(
-    "/info/rpc/starknet_call/{node}",
+    "/info/rpc/starknet_call",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -376,7 +457,7 @@ async def starknet_call(
 
 
 @app.get(
-    "/info/rpc/starknet_chainId/{node}",
+    "/info/rpc/starknet_chainId",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -387,7 +468,7 @@ async def starknet_chainId(
 
 
 @app.post(
-    "/info/rpc/starknet_estimateFee/{node}",
+    "/info/rpc/starknet_estimateFee",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -409,7 +490,7 @@ async def starknet_estimateFee(
 
 
 @app.post(
-    "/info/rpc/starknet_estimateMessageFee/{node}",
+    "/info/rpc/starknet_estimateMessageFee",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -431,7 +512,7 @@ async def starknet_estimateMessageFee(
 
 
 @app.get(
-    "/info/rpc/starknet_getBlockTransactionCount/{node}/",
+    "/info/rpc/starknet_getBlockTransactionCount",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -447,7 +528,7 @@ async def starknet_getBlockTransactionCount(
 
 
 @app.get(
-    "/info/rpc/starknet_getBlockWithReceipts/{node}/",
+    "/info/rpc/starknet_getBlockWithReceipts",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -467,7 +548,7 @@ async def starknet_getBlockWithReceipts(
 
 
 @app.get(
-    "/info/rpc/starknet_getBlockWithTxHashes/{node}/",
+    "/info/rpc/starknet_getBlockWithTxHashes",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -487,7 +568,7 @@ async def starknet_getBlockWithTxHashes(
 
 
 @app.get(
-    "/info/rpc/starknet_getBlockWithTxs/{node}/",
+    "/info/rpc/starknet_getBlockWithTxs",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -507,7 +588,7 @@ async def starknet_getBlockWithTxs(
 
 
 @app.get(
-    "/info/rpc/starknet_getClass/{node}/",
+    "/info/rpc/starknet_getClass",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -529,7 +610,7 @@ async def starknet_getClass(
 
 
 @app.get(
-    "/info/rpc/starknet_getClassAt/{node}/",
+    "/info/rpc/starknet_getClassAt",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -551,7 +632,7 @@ async def starknet_getClassAt(
 
 
 @app.get(
-    "/info/rpc/starknet_getClassHashAt/{node}/",
+    "/info/rpc/starknet_getClassHashAt",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -573,7 +654,7 @@ async def starknet_getClassHashAt(
 
 
 @app.post(
-    "/info/rpc/starknet_getEvents/{node}",
+    "/info/rpc/starknet_getEvents",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -585,7 +666,7 @@ async def starknet_getEvents(
 
 
 @app.get(
-    "/info/rpc/starknet_getNonce/{node}/",
+    "/info/rpc/starknet_getNonce",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -607,7 +688,7 @@ async def starknet_getNonce(
 
 
 @app.get(
-    "/info/rpc/starknet_getStateUpdate/{node}/",
+    "/info/rpc/starknet_getStateUpdate",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -627,7 +708,7 @@ async def starknet_getStateUpdate(
 
 
 @app.get(
-    "/info/rpc/starknet_getStorageAt/{node}/",
+    "/info/rpc/starknet_getStorageAt",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -651,7 +732,7 @@ async def starknet_getStorageAt(
 
 
 @app.get(
-    "/info/rpc/starknet_getTransactionByBlockIdAndIndex/{node}/",
+    "/info/rpc/starknet_getTransactionByBlockIdAndIndex",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -673,7 +754,7 @@ async def starknet_getTransactionByBlockIdAndIndex(
 
 
 @app.get(
-    "/info/rpc/starknet_getTransactionByHash/{node}/",
+    "/info/rpc/starknet_getTransactionByHash",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -685,7 +766,7 @@ async def starknet_getTransactionByHash(
 
 
 @app.get(
-    "/info/rpc/starknet_getTransactionReceipt/{node}/",
+    "/info/rpc/starknet_getTransactionReceipt",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -697,7 +778,7 @@ async def starknet_getTransactionReceipt(
 
 
 @app.get(
-    "/info/rpc/starknet_getTransactionStatus/{node}/",
+    "/info/rpc/starknet_getTransactionStatus",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -709,7 +790,7 @@ async def starknet_getTransactionStatus(
 
 
 @app.get(
-    "/info/rpc/starknet_specVersion/{node}",
+    "/info/rpc/starknet_specVersion",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -720,7 +801,7 @@ async def starknet_specVersion(
 
 
 @app.get(
-    "/info/rpc/starknet_syncing/{node}",
+    "/info/rpc/starknet_syncing",
     responses={**ERROR_CODES},
     tags=[Tags.READ],
 )
@@ -736,7 +817,7 @@ async def starknet_syncing(
 
 
 @app.post(
-    "/info/rpc/starknet_simulateTransactions/{node}/",
+    "/info/rpc/starknet_simulateTransactions",
     responses={**ERROR_CODES},
     tags=[Tags.TRACE],
 )
@@ -753,7 +834,7 @@ async def starknet_simulateTransactions(
 
 
 @app.post(
-    "/info/rpc/starknet_traceBlockTransactions/{node}/",
+    "/info/rpc/starknet_traceBlockTransactions",
     responses={**ERROR_CODES},
     tags=[Tags.TRACE],
 )
@@ -769,7 +850,7 @@ async def starknet_traceBlockTransactions(
 
 
 @app.post(
-    "/info/rpc/starknet_traceTransaction/{node}/",
+    "/info/rpc/starknet_traceTransaction",
     responses={**ERROR_CODES},
     tags=[Tags.TRACE],
 )
@@ -793,7 +874,7 @@ async def docker_get_running() -> list[str]:
 
 
 @app.get(
-    "/info/docker/ports/{node}",
+    "/info/docker/ports",
     responses={**ERROR_CODES},
     tags=[Tags.DEBUG],
 )
