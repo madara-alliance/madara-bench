@@ -190,12 +190,12 @@ async def db_bench_routine():
             10,
             250,
         ),
-        (
-            models_app.RpcCallBench.STARKNET_TRACE_TRANSACTION,
-            models.RpcCallDB.STARKNET_TRACE_TRANSACTION,
-            10,
-            250,
-        ),
+        # (
+        #     models_app.RpcCallBench.STARKNET_TRACE_TRANSACTION,
+        #     models.RpcCallDB.STARKNET_TRACE_TRANSACTION,
+        #     10,
+        #     250,
+        # ),
     ]
 
     metrics = [
