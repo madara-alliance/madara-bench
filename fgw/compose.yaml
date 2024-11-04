@@ -1,0 +1,41 @@
+name: fgw_runner
+
+services:
+  fgw:
+    image: madara:latest
+    container_name: "fgw_runner"
+    ports:
+      - "8080"
+    environment:
+      RPC_API_KEY_FILE: /run/secrets/rpc_api_key
+      GATEWAY_KEY_FILE: /run/secrets/gateway_key
+    secrets:
+      - rpc_api_key
+      - gateway_key
+    volumes:
+      - type: volume
+        source: db
+        target: /data
+        volume:
+          nocopy: true
+      - type: bind
+        source: ./fgw-runner.sh
+        target: /usr/local/bin/runner.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - fgw_network
+
+secrets:
+  rpc_api_key:
+    file: ../secrets/rpc_api.secret
+  gateway_key:
+    file: ../secrets/gateway_key.secret
+
+volumes:
+  db:
+
+networks:
+  fgw_network:
+    name: fgw_network

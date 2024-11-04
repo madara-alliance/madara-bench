@@ -1,6 +1,22 @@
 name: madara_runner
 
 services:
+  fgw_health_madara:
+    image: busybox:1.36-glibc
+    container_name: "fgw_health_madara"
+    external_links:
+      - fgw_health_madara
+    networks:
+      - fgw_network
+    command: >
+      sh -c '
+        until ping fgw:8080 -c 1; do
+          sleep 5
+        done
+      '
+    restart: "no"
+    init: true
+
   madara:
     image: madara:latest
     container_name: "madara_runner"
@@ -10,22 +26,34 @@ services:
       - "9944"
     environment:
       RPC_API_KEY_FILE: /run/secrets/rpc_api_key
-      GATEWAY_KEY_FILE: /run/secrets/gateway_key
     secrets:
       - rpc_api_key
-      - gateway_key
     volumes:
       - type: volume
         source: db
         target: /data
         volume:
           nocopy: true
+      - type: bind
+        source: ./madara-runner.sh
+        target: /usr/local/bin/runner.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - fgw_network
+    depends_on:
+      fgw_health_madara:
+        condition: service_completed_successfully
 
 secrets:
   rpc_api_key:
     file: ../secrets/rpc_api.secret
-  gateway_key:
-    file: ../secrets/gateway_key.secret
 
 volumes:
   db:
+
+networks:
+  fgw_network:
+    name: fgw_network
+    external: true

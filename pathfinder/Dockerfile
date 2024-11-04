@@ -51,10 +51,5 @@ WORKDIR /usr/local/bin
 # Copy the compiled binary from the builder stage
 COPY --from=builder /usr/src/pathfinder/target/release-lto/pathfinder .
 
-# Copies the runner. This is responsible for reading secrets and launching
-# madara
-COPY ./pathfinder-runner.sh .
-RUN chmod a+x ./pathfinder-runner.sh
-
 # Set the entrypoint
-CMD ["/usr/local/bin/pathfinder-runner.sh"]
+CMD ["/usr/local/bin/runner.sh"]

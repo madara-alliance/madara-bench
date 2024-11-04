@@ -4,7 +4,7 @@
 
 NODES    := madara juno pathfinder
 IMGS     := $(addsuffix /image.tar.gz,$(NODES))
-VOLUMES  := $(addsuffix _runner_db,$(NODES))
+VOLUMES  := $(addsuffix _runner_db,$(NODES)) fgw_runner_db
 SECRETS  := secrets/rpc_api.secret     \
             secrets/rpc_api_ws.secret  \
             secrets/gateway_key.secret \
@@ -37,6 +37,7 @@ Targets:
   - start-madara       Start the Madara node
   - start-juno         Start the Juno node
   - start-pathfinder   Start the Pathfinder node
+  - start-fgw          Start feeder gateway node
   - start-db           Start postgresql local db at ./db/data
   - start-service      Start api service at 0.0.0.0:8000/docs
   - start              Start all nodes and api service
@@ -49,6 +50,7 @@ Targets:
   - stop-madara        Stop the Madara node
   - stop-juno          Stop the Juno node
   - stop-pathfinder    Stop the Pathfinder node
+  - stop-fgw           Stop feeder gateway node
   - stop-db            Stop postgresql local db at ./db/data
   - stop               Stop all nodes
 
@@ -61,6 +63,8 @@ Targets:
   - restart-madara     Restart the Madara node
   - restart-juno       Restart the Juno node
   - restart-pathfinder Restart the Pathfinder node
+  - restart-fgw        Restart feeder gateway node
+  - restart-db         Restart postgresql local db at ./db/data
   - restart            Restart all nodes
   - frestart           Perform full clean and restart all nodes
 
@@ -72,6 +76,7 @@ Targets:
   - logs-madara        View logs for the Madara node
   - logs-juno          View logs for the Juno node
   - logs-pathfinder    View logs for the Pathfinder node
+  - logs-fgw           View logs for feeder gateway node
 
   [ BUILDING DEPENDENCIES ]
 
@@ -98,7 +103,7 @@ endef
 export HELP
 
 # dim white italic
-DIM := \033[2;3;37m
+DIM      := \033[2;3;37m
 
 # bold cyan
 INFO     := \033[1;36m
@@ -118,25 +123,30 @@ all: help
 help:
 	@echo "$$HELP"
 
+.PHONY: start-fgw
+start-fgw: images
+	@echo -e "$(DIM)starting$(RESET) $(PASS)fgw$(RESET)"
+	@docker compose -f fgw/compose.yaml up -d
+
 .PHONY: start-db
 start-db:
 	@echo -e "$(DIM)starting$(RESET) $(PASS)database$(RESET)"
 	@docker compose -f db/compose.yaml up -d
 
 .PHONY: start-madara
-start-madara: images $(SECRETS)
+start-madara: start-fgw $(SECRETS)
 	@echo -e "$(DIM)running$(RESET) $(PASS)madara$(RESET)"
-	@docker-compose -f madara/compose.yaml up -d
+	@docker compose -f madara/compose.yaml up -d
 
 .PHONY: start-juno
-start-juno: images $(SECRETS)
+start-juno: start-fgw $(SECRETS)
 	@echo -e "$(DIM)running$(RESET) $(PASS)juno$(RESET)"
-	@docker-compose -f juno/compose.yaml up -d
+	@docker compose -f juno/compose.yaml up -d
 
 .PHONY: start-pathfinder
-start-pathfinder: images $(SECRETS)
+start-pathfinder: start-fgw $(SECRETS)
 	@echo -e "$(DIM)running$(RESET) $(PASS)pathfinder$(RESET)"
-	@docker-compose -f pathfinder/compose.yaml up -d
+	@docker compose -f pathfinder/compose.yaml up -d
 
 .PHONY: start-service
 start-service: start-db
@@ -144,11 +154,16 @@ start-service: start-db
 	@$(RUNNER)
 
 .PHONY: start
-start: start-db
+start: start-db start-fgw
 	@make --silent start-madara start-juno start-pathfinder
 	@echo -e "$(PASS)all services are up$(RESET)"
 	@$(DEPS)
 	@$(RUNNER)
+
+.PHONY: stop-fgw
+stop-fgw:
+	@echo -e "$(DIM)stopping$(RESET) $(WARN)fgw$(RESET)"
+	@docker compose -f fgw/compose.yaml stop
 
 .PHONY: stop-db
 stop-db:
@@ -158,37 +173,42 @@ stop-db:
 .PHONY: stop-madara
 stop-madara:
 	@echo -e "$(DIM)stopping$(RESET) $(WARN)madara$(RESET)"
-	@docker-compose -f madara/compose.yaml stop
+	@docker compose -f madara/compose.yaml stop
 
 .PHONY: stop-juno
 stop-juno:
 	@echo -e "$(DIM)stopping$(RESET) $(WARN)juno$(RESET)"
-	@docker-compose -f juno/compose.yaml stop
+	@docker compose -f juno/compose.yaml stop
 
 .PHONY: stop-pathfinder
 stop-pathfinder:
 	@echo -e "$(DIM)stopping$(RESET) $(WARN)pathfinder$(RESET)"
-	@docker-compose -f pathfinder/compose.yaml stop
+	@docker compose -f pathfinder/compose.yaml stop
 
 .PHONY: stop
 stop: stop-madara stop-juno stop-pathfinder
-	@make --silent stop-db
+	@make --silent stop-db stop-fgw
 	@echo -e "$(WARN)all services stopped$(RESET)"
+
+.PHONY: logs-fgw
+logs-fgw:
+	@echo -e "$(DIM)logs for$(RESET) $(INFO)fgw$(RESET)";
+	@docker compose -f fgw/compose.yaml logs -f -n 100;
 
 .PHONY: logs-madara
 logs-madara:
 	@echo -e "$(DIM)logs for$(RESET) $(INFO)madara$(RESET)";
-	@docker-compose -f madara/compose.yaml logs -f -n 100;
+	@docker compose -f madara/compose.yaml logs -f -n 100;
 
 .PHONY: logs-juno
 logs-juno:
 	@echo -e "$(DIM)logs for$(RESET) $(INFO)juno$(RESET)";
-	@docker-compose -f juno/compose.yaml logs -f -n 100;
+	@docker compose -f juno/compose.yaml logs -f -n 100;
 
 .PHONY: logs-pathfinder
 logs-pathfinder:
 	@echo -e "$(DIM)logs for$(RESET) $(INFO)pathfinder$(RESET)";
-	@docker-compose -f pathfinder/compose.yaml logs -f -n 100;
+	@docker compose -f pathfinder/compose.yaml logs -f -n 100;
 
 .PHONY: images
 images: $(IMGS)
@@ -224,6 +244,10 @@ fclean: clean-db
 	@rm -rf $(IMGS)
 	@echo -e "$(WARN)artefacts cleaned$(RESET)"
 
+.PHONY: restart-fgw
+restart-fgw: clean
+	@make --silent start-fgw
+
 .PHONY: restart-madara
 restart-madara: clean
 	@make --silent start-madara
@@ -248,9 +272,8 @@ restart: clean
 frestart: fclean
 	@make --silent start
 
-.SECONDEXPANSION:
 %image.tar.gz: node = $(@D)
-%image.tar.gz: %Dockerfile %$$(node)-runner.sh
+%image.tar.gz: %Dockerfile
 	@echo -e "$(DIM)building$(RESET) $(PASS)$(node)$(RESET)"
 	@docker image rm -f $(node):latest || true
 	@docker build -t $(node):latest $(node)

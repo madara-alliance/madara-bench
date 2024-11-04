@@ -1,13 +1,12 @@
 #!/bin/sh
 export RPC_API_KEY=$(cat $RPC_API_KEY_FILE)
-export GATEWAY_KEY=$(cat $GATEWAY_KEY_FILE)
 
-./madara                       \
-	--name madara              \
-	--base-path /data/madara   \
-	--network sepolia          \
-	--rpc-external             \
-	--rpc-cors all             \
-	--full                     \
-	--l1-endpoint $RPC_API_KEY \
-	--gateway-key $GATEWAY_KEY
+./madara                                          \
+	--name madara                                 \
+	--base-path /data/madara                      \
+	--network sepolia                             \
+	--rpc-external                                \
+	--rpc-cors all                                \
+	--full                                        \
+	--gateway-url http://fgw:8080/feeder_gateway/ \
+	--l1-endpoint $RPC_API_KEY

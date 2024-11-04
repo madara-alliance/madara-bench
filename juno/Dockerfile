@@ -44,9 +44,5 @@ WORKDIR /usr/local/bin
 # Copy the compiled binary from the builder stage
 COPY --from=build /usr/src/juno/build/juno .
 
-# Copies the runner. This is responsible for reading secrets and launching juno
-COPY ./juno-runner.sh .
-RUN chmod a+x ./juno-runner.sh
-
 # Set the entrypoint
-ENTRYPOINT ["/usr/local/bin/juno-runner.sh"]
+ENTRYPOINT ["/usr/local/bin/runner.sh"]

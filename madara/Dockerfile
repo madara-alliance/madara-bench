@@ -47,10 +47,5 @@ WORKDIR /usr/local/bin
 # Copy the compiled binary from the builder stage
 COPY --from=builder /usr/src/madara/target/release/madara .
 
-# Copies the runner. This is responsible for reading secrets and launching
-# madara
-COPY ./madara-runner.sh .
-RUN chmod a+x ./madara-runner.sh
-
 # Set the entrypoint
-CMD ["/usr/local/bin/madara-runner.sh"]
+CMD ["/usr/local/bin/runner.sh"]
