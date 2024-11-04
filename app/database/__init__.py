@@ -11,8 +11,26 @@ from app import models as models_app
 
 from . import models
 
-postgres_url = "postgresql://postgres:password@localhost:5432/postgres"
-engine = sqlmodel.create_engine(postgres_url)
+
+def read_secret(path: str) -> str:
+    try:
+        with open(path) as file:
+            secret = file.read().strip()
+        return secret
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Missing: {path}")
+    except PermissionError:
+        raise PermissionError(f"Missing permission to read: {path}")
+    except Exception as e:
+        raise Exception(f"Error reading {path}: {str(e)}")
+
+
+def db_url() -> str:
+    secret = read_secret("./secrets/db_password.secret")
+    return f"postgresql://postgres:{secret}@localhost:5432/postgres"
+
+
+engine = sqlmodel.create_engine(db_url())
 logger = logging.get_logger()
 
 

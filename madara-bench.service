@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/nix/var/nix/profiles/default/bin/nix develop /path/to/madara-bench  --extra-experimental-features "nix-command flakes" --command make -C /path/to/madara-bench start
-ExecStop=/nix/var/nix/profiles/default/bin/nix develop /path/to/madara-bench  --extra-experimental-features "nix-command flakes" --command make -C /path/to/madara-bench stop
-ExecReload=/nix/var/nix/profiles/default/bin/nix develop /path/to/madara-bench  --extra-experimental-features "nix-command flakes" --command make -C /path/to/madara-bench restart
+ExecStart=/nix/var/nix/profiles/default/bin/nix develop /path/to/madara-bench  --extra-experimental-features "nix-command flakes" --command make start -C /path/to/madara-bench
+ExecStop=/nix/var/nix/profiles/default/bin/nix develop /path/to/madara-bench  --extra-experimental-features "nix-command flakes" --command make stop -C /path/to/madara-bench
+ExecReload=/nix/var/nix/profiles/default/bin/nix develop /path/to/madara-bench  --extra-experimental-features "nix-command flakes" --command make restart -C /path/to/madara-bench
 Restart=on-failure
 RestartSec=5s
 
