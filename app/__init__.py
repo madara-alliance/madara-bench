@@ -1,10 +1,13 @@
 import asyncio
+import functools
+import io
 from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Any
 
 import docker
 import fastapi
+import matplotlib.pyplot
 import requests
 import sqlmodel
 from docker import errors as docker_errors
@@ -30,7 +33,8 @@ from starknet_py.net.client_models import (
     TransactionStatusResponse,
 )
 
-from app import database, deps, error, models, rpc, system
+from app import database, deps, error, graph, models, rpc, system
+from app.models.models import NodeResponseBenchRpc
 
 MADARA: str = "madara_runner"
 MADARA_DB: str = "madara_runner_db"
@@ -91,31 +95,20 @@ class Tags(str, Enum):
 async def lifespan(_: fastapi.FastAPI):
     database.init_db_and_tables()
 
-    task1 = asyncio.create_task(database.db_bench_routine_rpc())
-    task2 = asyncio.create_task(database.db_bench_routine_sys())
+    task = asyncio.create_task(database.db_bench_routine())
 
     yield
 
     try:
-        ex1 = task1.exception()
-        if ex1:
-            raise ex1
+        ex = task.exception()
+        if ex:
+            raise ex
     except asyncio.CancelledError:
         pass
     except asyncio.InvalidStateError:
         pass
 
-    try:
-        ex2 = task2.exception()
-        if ex2:
-            raise ex2
-    except asyncio.CancelledError:
-        pass
-    except asyncio.InvalidStateError:
-        pass
-
-    task1.cancel()
-    task2.cancel()
+    task.cancel()
 
 
 # =========================================================================== #
@@ -154,6 +147,44 @@ async def exception_handler_client_error(request: fastapi.Request, err: ClientEr
 # =========================================================================== #
 
 
+def latest(session: sqlmodel.Session) -> int:
+    latest = session.exec(
+        sqlmodel.select(database.models.BlockDB)
+        .order_by(sqlmodel.desc(database.models.BlockDB.id))
+        .limit(1)
+    ).first()
+
+    if latest:
+        return latest.id
+    else:
+        return 0
+
+
+def or_latest(n: int | models.query.Latest, latest: int) -> int:
+    if n == "latest":
+        return latest
+    else:
+        return n
+
+
+apply_key = lambda x: x.block_number
+apply_sort = lambda l: sorted(l, key=apply_key)
+apply_merge = lambda l: functools.reduce(deduplicate_merge, l, [])
+
+
+def deduplicate_merge(
+    acc: list[models.models.NodeResponseBenchRpc], resp: NodeResponseBenchRpc
+) -> list[models.models.NodeResponseBenchRpc]:
+    if acc and acc[-1].block_number == resp.block_number:
+        # This only works because benchmarks for a same method have the same sample count
+        acc[-1].elapsed_avg = (acc[-1].elapsed_avg + resp.elapsed_avg) // 2
+        acc[-1].elapsed_low = min(acc[-1].elapsed_low, resp.elapsed_low)
+        acc[-1].elapsed_high = max(acc[-1].elapsed_high, resp.elapsed_high)
+    else:
+        acc.append(resp)
+    return acc
+
+
 @app.get("/bench/system/", responses={**ERROR_CODES}, tags=[Tags.BENCH])
 async def benchmark_system(
     metrics: models.SystemMetric,
@@ -163,30 +194,14 @@ async def benchmark_system(
     session: database.Session,
     limit: models.query.RangeLimit = None,
 ) -> list[models.ResponseModelSystem]:
-    def or_latest(n: int | models.query.Latest, latest: int) -> int:
-        if n == "latest":
-            return latest
-        else:
-            return n
-
-    latest = session.exec(
-        sqlmodel.select(database.models.BlockDB)
-        .order_by(sqlmodel.desc(database.models.BlockDB.id))
-        .limit(1)
-    ).first()
-
-    if latest:
-        latest = latest.id
-    else:
-        latest = 0
-
-    block_start = or_latest(block_start, latest)
-    block_end = or_latest(block_end, latest)
+    l = latest(session)
+    block_start = or_latest(block_start, l)
+    block_end = or_latest(block_end, l)
 
     metrics_idx = database.models.SystemMetricDB.from_model_bench(metrics)
     node_idx = database.models.NodeDB.from_model_bench(node)
     blocks = session.exec(
-        sqlmodel.select(database.models.BlockDB)
+        sqlmodel.select(database.models.BlockDB, database.models.BenchmarkSystemDB)
         .join(database.models.BenchmarkSystemDB)
         .where(database.models.BlockDB.id >= block_start)
         .where(database.models.BlockDB.id <= block_end)
@@ -195,7 +210,7 @@ async def benchmark_system(
         .limit(limit)
     ).all()
 
-    return [resp for block in blocks for resp in block.node_response_sys(metrics_idx)]
+    return [bench.node_response(block.id) for block, bench in blocks]
 
 
 @app.get(
@@ -221,31 +236,14 @@ async def benchmark_rpc(
     The range of blocks is start and end inclusive. Use `latest` as placeholder
     for the highest current block number.
     """
-
-    def or_latest(n: int | models.query.Latest, latest: int) -> int:
-        if n == "latest":
-            return latest
-        else:
-            return n
-
-    latest = session.exec(
-        sqlmodel.select(database.models.BlockDB)
-        .order_by(sqlmodel.desc(database.models.BlockDB.id))
-        .limit(1)
-    ).first()
-
-    if latest:
-        latest = latest.id
-    else:
-        latest = 0
-
-    block_start = or_latest(block_start, latest)
-    block_end = or_latest(block_end, latest)
+    l = latest(session)
+    block_start = or_latest(block_start, l)
+    block_end = or_latest(block_end, l)
 
     method_idx = database.models.RpcCallDB.from_model_bench(method)
     node_idx = database.models.NodeDB.from_model_bench(node)
     blocks = session.exec(
-        sqlmodel.select(database.models.BlockDB)
+        sqlmodel.select(database.models.BlockDB, database.models.BenchmarkRpcDB)
         .join(database.models.BenchmarkRpcDB)
         .where(database.models.BlockDB.id >= block_start)
         .where(database.models.BlockDB.id <= block_end)
@@ -254,7 +252,78 @@ async def benchmark_rpc(
         .limit(limit)
     ).all()
 
-    return [resp for block in blocks for resp in block.node_response_rpc(method_idx)]
+    resps = [bench.node_response(block.id) for block, bench in blocks]
+    return apply_merge(apply_sort(resps))
+
+
+@app.post(
+    "/bench/graph/rpc",
+    responses={**ERROR_CODES, 200: {"content": {"image/png": {}}}},
+    response_class=fastapi.responses.Response,
+    tags=[Tags.BENCH],
+)
+async def benchmark_graph_rpc(
+    method: models.models.RpcCallBench,
+    nodes: list[models.models.NodeName],
+    block_start: models.query.BlockRange,
+    block_end: models.query.BlockRange,
+    session: database.Session,
+    with_error: bool = False,
+):
+    l = latest(session)
+    block_start = or_latest(block_start, l)
+    block_end = or_latest(block_end, l)
+
+    method_idx = database.models.RpcCallDB.from_model_bench(method)
+    blocks = [
+        session.exec(
+            sqlmodel.select(database.models.BlockDB, database.models.BenchmarkRpcDB)
+            .join(database.models.BenchmarkRpcDB)
+            .where(database.models.BlockDB.id >= block_start)
+            .where(database.models.BlockDB.id <= block_end)
+            .where(
+                database.models.BenchmarkRpcDB.node_idx
+                == database.models.NodeDB.from_model_bench(node)
+            )
+            .where(database.models.BenchmarkRpcDB.method_idx == method_idx)
+        ).all()
+        for node in nodes
+    ]
+
+    data = [
+        merge
+        for blocks in blocks
+        for merge in apply_merge(apply_sort([bnch.node_response(blk.id) for blk, bnch in blocks]))
+    ]
+
+    if len(data) == 0:
+        raise error.ErrorNoInputFound(method.value)
+
+    # WARNING: THERE BE DRAGONS, THE FOLLOWING CODE IS AI GENERATED 🐉
+
+    # Generate the plot
+    fig = graph.generate_line_graph(data, method.value, with_error)
+
+    # Create a bytes buffer for the image
+    buf = io.BytesIO()
+
+    # Save the plot to the buffer in PNG format
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=300)
+
+    # Close the figure to free memory
+    matplotlib.pyplot.close(fig)
+
+    # Seek to the start of the buffer
+    buf.seek(0)
+
+    # Return the image as a downloadable file
+    return fastapi.responses.StreamingResponse(
+        buf,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f"attachment; filename={method.value}_{block_start}_{block_end}.png"
+        },
+    )
 
 
 # =========================================================================== #

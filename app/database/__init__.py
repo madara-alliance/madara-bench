@@ -1,5 +1,4 @@
 import asyncio
-import json
 from typing import Annotated, Any, Generator
 
 import fastapi
@@ -17,55 +16,7 @@ engine = sqlmodel.create_engine(postgres_url)
 logger = logging.get_logger()
 
 
-async def db_bench_routine_sys():
-    node_info_madara = deps.deps_container(models_app.NodeName.MADARA)
-    node_info_juno = deps.deps_container(models_app.NodeName.JUNO)
-    node_info_pathfinder = deps.deps_container(models_app.NodeName.PATHFINDER)
-
-    metrics = [
-        (
-            models_app.models.SystemMetric.CPU_SYSTEM,
-            models.SystemMetricDB.CPU_SYSTEM,
-            10,  # samples
-            1000,  # interval
-        ),
-        (
-            models_app.models.SystemMetric.MEMORY,
-            models.SystemMetricDB.MEMORY,
-            10,
-            1000,
-        ),
-        (
-            models_app.models.SystemMetric.STORAGE,
-            models.SystemMetricDB.STORAGE,
-            1,
-            1000,
-        ),
-    ]
-
-    while True:
-        logger.info(">> SYSTEM BENCH SESSION - START")
-        for metrics_app, metrics_db, samples, interval in metrics:
-            await db_bench_system(
-                next(session()),
-                node_info_madara.info,
-                node_info_juno.info,
-                node_info_pathfinder.info,
-                metrics_app,
-                metrics_db,
-                samples,
-                interval,
-            )
-
-            # For some reasons getting container stats takes really long and
-            # slows down the entire app despite being run FROM A SEPARATE TASK,
-            # so we add an extra cooldown here. Might be necessary to look into
-            # asyncio's executor model and the docker py module impl to figure
-            # out what the hell is going on :/
-            await asyncio.sleep(60)
-
-
-async def db_bench_routine_rpc():
+async def db_bench_routine():
     node_info_madara = deps.deps_container(models_app.NodeName.MADARA)
     node_info_juno = deps.deps_container(models_app.NodeName.JUNO)
     node_info_pathfinder = deps.deps_container(models_app.NodeName.PATHFINDER)
@@ -229,6 +180,27 @@ async def db_bench_routine_rpc():
         ),
     ]
 
+    metrics = [
+        (
+            models_app.models.SystemMetric.CPU_SYSTEM,
+            models.SystemMetricDB.CPU_SYSTEM,
+            10,  # samples
+            1000,  # interval
+        ),
+        (
+            models_app.models.SystemMetric.MEMORY,
+            models.SystemMetricDB.MEMORY,
+            10,
+            1000,
+        ),
+        (
+            models_app.models.SystemMetric.STORAGE,
+            models.SystemMetricDB.STORAGE,
+            1,
+            1000,
+        ),
+    ]
+
     while True:
         logger.info(">> RPC BENCH SESSION - START")
         for method_rpc, method_db, samples, interval in methods:
@@ -264,6 +236,94 @@ async def db_bench_routine_rpc():
                     interval=interval,
                 ),
             )
+
+        logger.info(">> SYS BENCH SESSION - START")
+        for metrics_app, metrics_db, samples, interval in metrics:
+            await db_bench_system(
+                next(session()),
+                node_info_madara.info,
+                node_info_juno.info,
+                node_info_pathfinder.info,
+                metrics_app,
+                metrics_db,
+                samples,
+                interval,
+            )
+
+
+async def db_bench_method(
+    s: sqlmodel.Session,
+    node_rpc: models_app.NodeName,
+    node_db: models.NodeDB,
+    node_url: str,
+    method_rpc: models_app.models.RpcCallBench,
+    method_db: models.RpcCallDB,
+    samples: int,
+    interval: int,
+):
+    logger_common = f"Benchmarking RPC - {node_rpc.value}: {method_rpc.value}"
+    logger.info(logger_common)
+    try:
+        bench = await benchmarks.benchmark_rpc(
+            urls={node_rpc: node_url},
+            rpc_call=method_rpc,
+            samples=samples,
+            interval=interval,
+        )
+    except error.ErrorNoInputFound:
+        logger.info(f"{logger_common} - NO INPUT FOUND")
+        return
+    except error.ErrorStarknetVersion:
+        logger.info(f"{logger_common} - INVALID STARKNET VERSION")
+        return
+    except error.ErrorRpcCall:
+        logger.info(f"{logger_common} - RPC CALL FAILURE")
+        return
+    except marshmallow.ValidationError:
+        logger.info(f"{logger_common} - VALIDATION ERROR")
+        return
+    except Exception as e:
+        latest = s.exec(
+            sqlmodel.select(models.BlockDB)
+            .join(models.BenchmarkRpcDB)
+            .where(models.BenchmarkRpcDB.node_idx == node_db)
+            .order_by(sqlmodel.desc(models.BlockDB.id))
+            .limit(1)
+        ).first()
+
+        if latest:
+            latest = latest.id
+        else:
+            latest = 0
+
+        logger.info(
+            f"{logger_common} - UNEXPECTED ERROR: {node_rpc.value} {method_rpc.value} {latest} - {e}"
+        )
+        return
+
+    # This is safe as we are only benchmarking a single node
+    node_results = bench.nodes[0]
+    block_db = s.get(models.BlockDB, node_results.block_number)
+
+    if block_db:
+        logger.info(f"{logger_common} - STORING - {block_db.id}")
+    else:
+        logger.info(f"{logger_common} - STORING - {node_results.block_number}")
+
+    block = block_db or models.BlockDB(id=node_results.block_number)
+
+    benchmark = models.BenchmarkRpcDB(
+        node_idx=node_db,
+        method_idx=method_db,
+        elapsed_avg=node_results.elapsed_avg,
+        elapsed_low=node_results.elapsed_low,
+        elapsed_high=node_results.elapsed_high,
+        block=block,
+    )
+
+    s.add(benchmark)
+    s.commit()
+    logger.info(f"{logger_common} - DONE - {block}")
 
 
 async def db_bench_system(
@@ -356,90 +416,6 @@ async def db_bench_system(
 
     s.commit()
     logger.info(f"{logger_common} - DONE")
-
-
-async def db_bench_method(
-    s: sqlmodel.Session,
-    node_rpc: models_app.NodeName,
-    node_db: models.NodeDB,
-    node_url: str,
-    method_rpc: models_app.models.RpcCallBench,
-    method_db: models.RpcCallDB,
-    samples: int,
-    interval: int,
-):
-    logger_common = f"Benchmarking RPC - {node_rpc.value}: {method_rpc.value}"
-    logger.info(logger_common)
-    try:
-        bench = await benchmarks.benchmark_rpc(
-            urls={node_rpc: node_url},
-            rpc_call=method_rpc,
-            samples=samples,
-            interval=interval,
-        )
-    except error.ErrorNoInputFound:
-        logger.info(f"{logger_common} - NO INPUT FOUND")
-        return
-    except error.ErrorStarknetVersion:
-        logger.info(f"{logger_common} - INVALID STARKNET VERSION")
-        return
-    except error.ErrorRpcCall:
-        logger.info(f"{logger_common} - RPC CALL FAILURE")
-        return
-    except marshmallow.ValidationError:
-        logger.info(f"{logger_common} - VALIDATION ERROR")
-        return
-    except Exception as e:
-        latest = s.exec(
-            sqlmodel.select(models.BlockDB)
-            .join(models.BenchmarkRpcDB)
-            .where(models.BenchmarkRpcDB.node_idx == node_db)
-            .order_by(sqlmodel.desc(models.BlockDB.id))
-            .limit(1)
-        ).first()
-
-        if latest:
-            latest = latest.id
-        else:
-            latest = 0
-
-        logger.info(
-            f"{logger_common} - UNEXPECTED ERROR: {node_rpc.value} {method_rpc.value} {latest} - {e}"
-        )
-        return
-
-    # This is safe as we are only benchmarking a single node
-    node_results = bench.nodes[0]
-    block_db = s.get(models.BlockDB, node_results.block_number)
-
-    if block_db:
-        logger.info(f"{logger_common} - STORING - {block_db.id}")
-    else:
-        logger.info(f"{logger_common} - STORING - {node_results.block_number}")
-
-    block = block_db or models.BlockDB(id=node_results.block_number)
-
-    try:
-        input = models.InputDB(input=json.dumps(bench.inputs))
-    except:
-        input_bench = [
-            {key: value.model_dump_json() for key, value in inp.items()} for inp in bench.inputs
-        ]
-        input = models.InputDB(input=json.dumps(input_bench))
-
-    benchmark = models.BenchmarkRpcDB(
-        node_idx=node_db,
-        method_idx=method_db,
-        elapsed_avg=node_results.elapsed_avg,
-        elapsed_low=node_results.elapsed_low,
-        elapsed_high=node_results.elapsed_high,
-        block=block,
-        input=input,
-    )
-
-    s.add(benchmark)
-    s.commit()
-    logger.info(f"{logger_common} - DONE - {block}")
 
 
 def init_db_and_tables():

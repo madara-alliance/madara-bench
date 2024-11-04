@@ -135,32 +135,6 @@ class BlockDB(sqlmodel.SQLModel, table=True):
         back_populates="block", passive_deletes="all"
     )
 
-    def node_response_rpc(self, method_idx: int) -> list[models.models.NodeResponseBenchRpc]:
-        return [
-            models.models.NodeResponseBenchRpc(
-                node=models.models.NodeName.from_scalar_idx(bench.node_idx) or "invalid",
-                method=models.models.RpcCallBench.from_scalar_idx(bench.method_idx) or "invalid",
-                block_number=self.id,
-                elapsed_avg=bench.elapsed_avg,
-                elapsed_low=bench.elapsed_low,
-                elapsed_high=bench.elapsed_high,
-            )
-            for bench in self.benchmarks_rpc
-            if bench.method_idx == method_idx
-        ]
-
-    def node_response_sys(self, metrics_idx: int) -> list[models.models.ResponseModelSystem]:
-        return [
-            models.models.ResponseModelSystem(
-                node=models.models.NodeName.from_scalar_idx(bench.node_idx) or "invalid",
-                metric=models.models.SystemMetric.from_scalar_idx(bench.metrics_idx) or "invalid",
-                block_number=self.id,
-                value=bench.value,
-            )
-            for bench in self.benchmarks_sys
-            if bench.metrics_idx == metrics_idx
-        ]
-
 
 class BenchmarkRpcDB(sqlmodel.SQLModel, table=True):
     # columns
@@ -175,22 +149,19 @@ class BenchmarkRpcDB(sqlmodel.SQLModel, table=True):
     block_id: int | None = sqlmodel.Field(
         default=None, foreign_key="blockdb.id", ondelete="RESTRICT"
     )
-    input_id: int | None = sqlmodel.Field(
-        default=None, foreign_key="inputdb.id", ondelete="CASCADE"
-    )
 
     # relationships
     block: BlockDB = sqlmodel.Relationship(back_populates="benchmarks_rpc", passive_deletes="all")
-    input: "InputDB" = sqlmodel.Relationship(back_populates="benchmark", passive_deletes="all")
 
-
-class InputDB(sqlmodel.SQLModel, table=True):
-    # columns
-    id: int | None = sqlmodel.Field(default=None, primary_key=True)
-    input: str
-
-    # relationships
-    benchmark: BenchmarkRpcDB = sqlmodel.Relationship(back_populates="input", passive_deletes="all")
+    def node_response(self, block_number: int) -> models.models.NodeResponseBenchRpc:
+        return models.models.NodeResponseBenchRpc(
+            node=models.models.NodeName.from_scalar_idx(self.node_idx) or "invalid",
+            method=models.models.RpcCallBench.from_scalar_idx(self.method_idx) or "invalid",
+            block_number=block_number,
+            elapsed_avg=self.elapsed_avg,
+            elapsed_low=self.elapsed_low,
+            elapsed_high=self.elapsed_high,
+        )
 
 
 class BenchmarkSystemDB(sqlmodel.SQLModel, table=True):
@@ -207,3 +178,11 @@ class BenchmarkSystemDB(sqlmodel.SQLModel, table=True):
 
     # relationships
     block: BlockDB = sqlmodel.Relationship(back_populates="benchmarks_sys", passive_deletes="all")
+
+    def node_response(self, block_number: int) -> models.models.ResponseModelSystem:
+        return models.models.ResponseModelSystem(
+            node=models.models.NodeName.from_scalar_idx(self.node_idx) or "invalid",
+            metric=models.models.SystemMetric.from_scalar_idx(self.metrics_idx) or "invalid",
+            block_number=block_number,
+            value=self.value,
+        )
