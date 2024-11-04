@@ -276,11 +276,11 @@ async def db_bench_method(
     except error.ErrorStarknetVersion:
         logger.info(f"{logger_common} - INVALID STARKNET VERSION")
         return
-    except error.ErrorRpcCall:
-        logger.info(f"{logger_common} - RPC CALL FAILURE")
+    except error.ErrorRpcCall as e:
+        logger.info(f"{logger_common} - RPC CALL FAILURE - {e}")
         return
-    except marshmallow.ValidationError:
-        logger.info(f"{logger_common} - VALIDATION ERROR")
+    except marshmallow.ValidationError as e:
+        logger.info(f"{logger_common} - VALIDATION ERROR - {e}")
         return
     except Exception as e:
         latest = s.exec(
