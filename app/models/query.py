@@ -36,16 +36,12 @@ ContractAddress = Annotated[
 
 ContractKey = Annotated[
     Hash,
-    fastapi.Query(
-        pattern=REGEX_HEX, description="Key to a storage element in a contract"
-    ),
+    fastapi.Query(pattern=REGEX_HEX, description="Key to a storage element in a contract"),
 ]
 
 TxHash = Annotated[
     Hash,
-    fastapi.Query(
-        pattern=REGEX_HEX, description="Address of a Transaction on-chain"
-    ),
+    fastapi.Query(pattern=REGEX_HEX, description="Address of a Transaction on-chain"),
 ]
 
 TxIndex = Annotated[
@@ -92,4 +88,16 @@ BlockRange = Annotated[
 RangeLimit = Annotated[
     int | None,
     fastapi.Query(description="Maximum number of benchmarks to return"),
+]
+
+Threshold = Annotated[
+    int,
+    fastapi.Query(
+        ge=0,
+        le=100,
+        description=(
+            "Take only the first percent data points by order of magnitude. "
+            "Use this to filter out outliers"
+        ),
+    ),
 ]

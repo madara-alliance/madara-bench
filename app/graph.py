@@ -1,4 +1,5 @@
 import math
+from typing import TypeVar
 
 import matplotlib.axes
 import matplotlib.figure
@@ -10,6 +11,17 @@ import seaborn
 from app import database, models
 
 # WARNING: THERE BE DRAGONS, THE FOLLOWING CODE IS PARTLY AI GENERATED 🐉
+
+
+T = TypeVar("T")
+
+
+def common_filter(node_resp: list[T], threshold: int) -> list[T]:
+    if threshold >= 100 or threshold < 0:
+        return node_resp
+
+    take = int(len(node_resp) * (threshold / 100))
+    return node_resp[:take]
 
 
 def common_style():
@@ -98,9 +110,16 @@ def common_legend(ax: matplotlib.axes.Axes):
 
 
 def generate_line_graph_rpc(
-    node_resp: list[models.models.NodeResponseBenchRpc], title: str, with_error: bool = False
+    node_resp: list[models.models.NodeResponseBenchRpc],
+    title: str,
+    with_error: bool = False,
+    threshold: int = 100,
 ):
     common_style()
+
+    node_resp = sorted(node_resp, key=lambda x: x.elapsed_avg)
+    node_resp = common_filter(node_resp, threshold)
+    node_resp = sorted(node_resp, key=lambda x: x.block_number)
 
     # Create a DataFrame suitable for multiple lines with error bands. Responses
     # are in nanoseconds so we convert this this to microseconds to be more
@@ -157,7 +176,7 @@ def generate_line_graph_rpc(
     # Format axes
     ymax = max([resp.elapsed_avg for resp in node_resp]) // 1_000
     xmax = max([resp.block_number for resp in node_resp])
-    common_axes(ax, 0, xmax, 0, ymax, "Block number", "Latency (μs)")
+    common_axes(ax, 0, xmax, 0, ymax * 1.5, "Block number", "Latency (μs)")
 
     # Format the grid
     common_grid(ax, xmax, ymax)
@@ -175,19 +194,13 @@ def generate_line_graph_sys(
     node_resp: list[models.models.ResponseModelSystem],
     metrics: models.models.SystemMetric,
     title: str,
+    threshold: int = 100,
 ):
-    seaborn.set_style(
-        "whitegrid",
-        {
-            "axes.facecolor": "#ffffff",
-            "figure.facecolor": "#ffffff",
-            "grid.color": "#E5E5E5",  # Light gray grid
-            "axes.edgecolor": "#666666",  # Darker edge color for remaining spines
-            "axes.linewidth": 1.2,  # Slightly thicker spines
-        },
-    )
-    colors = ["#2C7BB6", "#FF8C00", "#2ECC71"]
-    seaborn.set_palette(colors)
+    common_style()
+
+    node_resp = sorted(node_resp, key=lambda x: x.value)
+    node_resp = common_filter(node_resp, threshold)
+    node_resp = sorted(node_resp, key=lambda x: x.block_number)
 
     # Create a DataFrame suitable for multiple lines with error bands. Responses
     # are in nanoseconds so we convert this this to microseconds to be more

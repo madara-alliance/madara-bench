@@ -281,6 +281,7 @@ async def benchmark_graph_rpc(
     block_end: models.query.BlockRange,
     session: database.Session,
     with_error: bool = False,
+    threshold: models.query.Threshold = 100,
 ):
     l = latest(session)
     block_start = or_latest(block_start, l)
@@ -314,7 +315,7 @@ async def benchmark_graph_rpc(
     # WARNING: THERE BE DRAGONS, THE FOLLOWING CODE IS AI GENERATED 🐉
 
     # Generate the plot
-    fig = graph.generate_line_graph_rpc(data, method.value, with_error)
+    fig = graph.generate_line_graph_rpc(data, method.value, with_error, threshold)
 
     # Create a bytes buffer for the image
     buf = io.BytesIO()
@@ -350,6 +351,7 @@ async def benchmark_graph_sys(
     block_start: models.query.BlockRange,
     block_end: models.query.BlockRange,
     session: database.Session,
+    threshold: models.query.Threshold = 100,
 ):
     l = latest(session)
     block_start = or_latest(block_start, l)
@@ -383,7 +385,7 @@ async def benchmark_graph_sys(
     # WARNING: THERE BE DRAGONS, THE FOLLOWING CODE IS AI GENERATED 🐉
 
     # Generate the plot
-    fig = graph.generate_line_graph_sys(data, metrics, metrics.value)
+    fig = graph.generate_line_graph_sys(data, metrics, metrics.value, threshold=threshold)
 
     # Create a bytes buffer for the image
     buf = io.BytesIO()
