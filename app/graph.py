@@ -1,5 +1,7 @@
 import math
 
+import matplotlib.axes
+import matplotlib.figure
 import matplotlib.pyplot
 import matplotlib.ticker
 import pandas
@@ -10,9 +12,7 @@ from app import database, models
 # WARNING: THERE BE DRAGONS, THE FOLLOWING CODE IS PARTLY AI GENERATED 🐉
 
 
-def generate_line_graph_rpc(
-    node_resp: list[models.models.NodeResponseBenchRpc], title: str, with_error: bool = False
-):
+def common_style():
     seaborn.set_style(
         "whitegrid",
         {
@@ -25,6 +25,82 @@ def generate_line_graph_rpc(
     )
     colors = ["#2C7BB6", "#FF8C00", "#2ECC71"]
     seaborn.set_palette(colors)
+
+
+def common_title(ax: matplotlib.axes.Axes, title: str):
+    ax.set_title(title, pad=20, fontsize=14, fontweight="bold", color="#333333")
+
+
+def common_spines(ax: matplotlib.axes.Axes, fig: matplotlib.figure.Figure):
+    seaborn.set_context("paper")
+    seaborn.despine(fig=fig, ax=ax, top=True, right=True, left=False, bottom=False)
+    for spine in ["left", "bottom"]:
+        ax.spines[spine].set_linewidth(1.2)
+        ax.spines[spine].set_color("#666666")
+
+
+def common_axes(
+    ax: matplotlib.axes.Axes,
+    xmin: float | int,
+    xmax: float | int,
+    ymin: float | int,
+    ymax: float | int,
+    xlabel: str,
+    ylabel: str,
+):
+    ax.tick_params(axis="both", labelsize=10, colors="#333333")
+
+    ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color="#333333")
+    ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color="#333333")
+
+    ax.set_ylim(ymin, ymax)
+    ax.set_xlim(xmin, xmax)
+
+    formatter = lambda x, _: format(int(x), ",")
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(formatter))
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(formatter))
+
+
+def common_grid(ax: matplotlib.axes.Axes, xmax: float | int, ymax: float | int):
+    xlocator = 10 ** (round(math.log10(xmax)) - 1)
+    ylocator = 10 ** (round(math.log10(ymax)) - 1)
+
+    if xmax // xlocator > 12:
+        xlocator *= 2
+    if ymax // ylocator > 12:
+        ylocator *= 2
+
+    # auto-scaling for the axes around the closest power of 10, should work well
+    # enough in most situations
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(xlocator))
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(ylocator))
+    ax.grid(True, which="major", color="#E5E5E5", linestyle="-", linewidth=0.8, alpha=0.5)
+
+    ax.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator(2))
+    ax.grid(True, which="minor", color="#F5F5F5", linestyle=":", linewidth=0.5, alpha=0.3)
+
+
+def common_legend(ax: matplotlib.axes.Axes):
+    legend = ax.legend(
+        title="Node",
+        title_fontsize=11,
+        fontsize=10,
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left",
+        borderaxespad=0,
+        frameon=True,
+        fancybox=True,
+        shadow=False,
+        framealpha=0.95,
+    )
+    legend.get_frame().set_linewidth(0.5)
+    legend.get_frame().set_edgecolor("#cccccc")
+
+
+def generate_line_graph_rpc(
+    node_resp: list[models.models.NodeResponseBenchRpc], title: str, with_error: bool = False
+):
+    common_style()
 
     # Create a DataFrame suitable for multiple lines with error bands. Responses
     # are in nanoseconds so we convert this this to microseconds to be more
@@ -72,61 +148,22 @@ def generate_line_graph_rpc(
         # Add markers
         ax.scatter(series_data["x_value"], series_data["average"], s=10, color=color, alpha=1)
 
-    # Customize spines
-    seaborn.set_context("paper")
-    seaborn.despine(fig=fig, ax=ax, top=True, right=True, left=False, bottom=False)
-    for spine in ["left", "bottom"]:
-        ax.spines[spine].set_linewidth(1.2)
-        ax.spines[spine].set_color("#666666")
-
     # Set title
-    ax.set_title(title, pad=20, fontsize=14, fontweight="bold", color="#333333")
+    common_title(ax, title)
 
-    # Customize tick labels
-    ax.tick_params(axis="both", labelsize=10, colors="#333333")
+    # Customize spines
+    common_spines(ax, fig)
 
     # Format axes
-    ax.set_xlabel("Block Number", fontsize=12, labelpad=10, color="#333333")
-    ax.set_ylabel("Latency (μs)", fontsize=12, labelpad=10, color="#333333")
-
     ymax = max([resp.elapsed_avg for resp in node_resp]) // 1_000
     xmax = max([resp.block_number for resp in node_resp])
-    ax.set_ylim(0, ymax * 1.5)
-    ax.set_xlim(0, xmax)
-
-    formatter = lambda x, _: format(int(x), ",")
-    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(formatter))
-    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(formatter))
+    common_axes(ax, 0, xmax, 0, ymax, "Block number", "Latency (μs)")
 
     # Format the grid
-    ylocator = 10 ** (round(math.log10(ymax)) - 1)
-    xlocator = 10 ** (round(math.log10(xmax)) - 1)
-
-    # auto-scaling for the axes around the closest power of 10, should work well
-    # enough in most situations
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(ylocator))
-    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(xlocator))
-    ax.grid(True, which="major", color="#E5E5E5", linestyle="-", linewidth=0.8, alpha=0.5)
-
-    ax.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator(2))
-    ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator(2))
-    ax.grid(True, which="minor", color="#F5F5F5", linestyle=":", linewidth=0.5, alpha=0.3)
+    common_grid(ax, xmax, ymax)
 
     # Format legend
-    legend = ax.legend(
-        title="Node",
-        title_fontsize=11,
-        fontsize=10,
-        bbox_to_anchor=(1.02, 1),
-        loc="upper left",
-        borderaxespad=0,
-        frameon=True,
-        fancybox=True,
-        shadow=False,
-        framealpha=0.95,
-    )
-    legend.get_frame().set_linewidth(0.5)
-    legend.get_frame().set_edgecolor("#cccccc")
+    common_legend(ax)
 
     # Adjust layout to prevent label cutoff
     fig.tight_layout()
@@ -213,60 +250,21 @@ def generate_line_graph_sys(
         # Add markers
         ax.scatter(series_data["x_value"], series_data["average"], s=10, color=color, alpha=1)
 
-    # Customize spines
-    seaborn.set_context("paper")
-    seaborn.despine(fig=fig, ax=ax, top=True, right=True, left=False, bottom=False)
-    for spine in ["left", "bottom"]:
-        ax.spines[spine].set_linewidth(1.2)
-        ax.spines[spine].set_color("#666666")
-
     # Set title
-    ax.set_title(title, pad=20, fontsize=14, fontweight="bold", color="#333333")
+    common_title(ax, title)
 
-    # Customize tick labels
-    ax.tick_params(axis="both", labelsize=10, colors="#333333")
+    # Customize spines
+    common_spines(ax, fig)
 
     # Format axes
-    ax.set_xlabel("Block Number", fontsize=12, labelpad=10, color="#333333")
-    ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color="#333333")
-
     xmax = max([resp.block_number for resp in node_resp])
-    ax.set_ylim(ymin, ymax)
-    ax.set_xlim(0, xmax)
-
-    formatter = lambda x, _: format(int(x), ",")
-    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(formatter))
-    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(formatter))
+    common_axes(ax, 0, xmax, ymin, ymax, "Block number", ylabel)
 
     # Format the grid
-    ylocator = 10 ** (round(math.log10(ymax)) - 1)
-    xlocator = 10 ** (round(math.log10(xmax)) - 1)
-
-    # auto-scaling for the axes around the closest power of 10, should work well
-    # enough in most situations
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(ylocator))
-    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(xlocator))
-    ax.grid(True, which="major", color="#E5E5E5", linestyle="-", linewidth=0.8, alpha=0.5)
-
-    ax.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator(2))
-    ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator(2))
-    ax.grid(True, which="minor", color="#F5F5F5", linestyle=":", linewidth=0.5, alpha=0.3)
+    common_grid(ax, xmax, ymax)
 
     # Format legend
-    legend = ax.legend(
-        title="Node",
-        title_fontsize=11,
-        fontsize=10,
-        bbox_to_anchor=(1.02, 1),
-        loc="upper left",
-        borderaxespad=0,
-        frameon=True,
-        fancybox=True,
-        shadow=False,
-        framealpha=0.95,
-    )
-    legend.get_frame().set_linewidth(0.5)
-    legend.get_frame().set_edgecolor("#cccccc")
+    common_legend(ax)
 
     # Adjust layout to prevent label cutoff
     fig.tight_layout()
